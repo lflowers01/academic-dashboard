@@ -69,6 +69,7 @@ When it's done, bookmark **http://localhost:4321**.
 | Add your own task | **+ Add task**, press **N**, or click an empty calendar day. Add an **End date** for something that spans days (e.g. Sat–Sun). Tick **This is an exam** for exams. |
 | Edit or delete your task | Click it |
 | Jump to today | **Today**, or press **T** |
+| See one day hour by hour | **Day** (or click a date number in Month/Week) |
 | Hide or show a course | **⚙ Settings → Courses** |
 | Notifications on/off, or a test | **⚙ Settings → Notifications** |
 | Turn optional features on or off | **⚙ Settings → Features** |

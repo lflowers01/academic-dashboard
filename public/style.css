@@ -182,6 +182,25 @@ dialog label.check input { width: auto; margin: 0; display: inline; }
 .study-btn { display: inline-block; background: #cfb991; color: #000; font-weight: 700; text-decoration: none; padding: 7px 14px; border-radius: 8px; }
 .study-btn:hover { background: #e0cfa8; }
 
+/* Day view */
+.day-view { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.day-allday { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--line); background: var(--panel-2); }
+.day-allday > .muted:first-child { font-size: 12px; width: 56px; }
+.day-allday .chip { width: auto; max-width: 100%; }
+.day-body { display: grid; grid-template-columns: 56px 1fr; max-height: 70vh; overflow-y: auto; }
+.day-hours { position: relative; border-right: 1px solid var(--line); }
+.day-hours > div { position: absolute; right: 6px; font-size: 11px; color: var(--muted); transform: translateY(-50%); }
+.day-hours > div:first-child { transform: none; }
+.day-grid { position: relative; cursor: copy; }
+.hour-line { position: absolute; left: 0; right: 0; border-top: 1px solid var(--line); }
+.pin-row { position: absolute; display: flex; flex-wrap: wrap; gap: 4px; align-items: center; padding: 0 6px; z-index: 2; }
+.pin-row .chip { width: auto; max-width: 100%; }
+.pin-tick { width: 8px; height: 8px; border-radius: 50%; background: var(--text); flex: none; }
+.day-block { position: absolute; z-index: 1; padding: 2px; }
+.day-block > .chip { height: 100%; white-space: normal; align-items: flex-start; }
+.now-line { position: absolute; left: 0; right: 0; border-top: 2px solid var(--red); z-index: 3; pointer-events: none; }
+.now-line::before { content: ""; position: absolute; left: -5px; top: -6px; width: 10px; height: 10px; border-radius: 50%; background: var(--red); }
+
 /* ⚙ Settings */
 #btnSettings { position: relative; }
 .attn { position: absolute; top: 3px; right: 3px; width: 8px; height: 8px; border-radius: 50%; background: var(--orange); }

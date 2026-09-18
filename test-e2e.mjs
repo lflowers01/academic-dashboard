@@ -290,6 +290,42 @@ async function run(browserName) {
       assert.equal(await page.isVisible('#btnNotify'), false); // old buttons are gone
     });
 
+    await step('day view: pins, exam block, navigation, click an hour to add a task', async () => {
+      await page.click('#modeDay');
+      assert.equal(await page.getAttribute('#modeDay', 'aria-pressed'), 'true');
+      assert.ok(await page.locator('#calGrid .day-grid').count() === 1);
+      assert.ok(await page.locator('#calGrid .pin-row .chip').count() >= 1, 'today has deadlines as pins');
+      assert.equal(await page.locator('#calGrid .now-line').count(), 1);
+      const title0 = await page.innerText('#calTitle');
+      await page.click('#next');
+      assert.notEqual(await page.innerText('#calTitle'), title0);
+      await page.click('#today');
+      assert.equal(await page.innerText('#calTitle'), title0);
+      // the demo announced exam (8–9 PM) is a block on its day
+      const { items } = await (await fetch(srv.base + '/api/data')).json();
+      const ex = items.find(i => i.kind === 'exam' && i.end);
+      for (let n = 0; n < 40 && !(await page.locator('#calGrid .day-block .chip.exam').count()); n++) {
+        const cur = new Date(await page.innerText('#calTitle'));
+        if (isNaN(cur)) break;
+        await page.click(new Date(ex.due) > cur ? '#next' : '#prev');
+      }
+      assert.equal(await page.locator('#calGrid .day-block .chip.exam').count(), 1);
+      // clicking an empty hour opens "add task" with that time
+      await page.click('#today');
+      await page.$eval('#calGrid .day-body', b => { b.scrollTop = 0; }); // the timeline opens scrolled to 'now'; go to the (empty) early morning
+      const grid = page.locator('#calGrid .day-grid');
+      const box = await grid.boundingBox();
+      await page.mouse.click(box.x + box.width - 10, box.y + 5);
+      assert.equal(await page.$eval('#dlgTask', d => d.open), true);
+      assert.match(await page.inputValue('#taskForm input[name=time]'), /^\d{2}:00$/);
+      await page.keyboard.press('Escape');
+      await page.click('#modeMonth');
+      // clicking a day number in month view opens that day
+      await page.locator('#calGrid .num.today').click();
+      assert.equal(await page.getAttribute('#modeDay', 'aria-pressed'), 'true');
+      await page.click('#modeMonth');
+    });
+
     await step('announcements tab, unread badge, mark read', async () => {
       assert.equal(await page.isVisible('#annBadge'), true);
       await page.click('#tabAnn');

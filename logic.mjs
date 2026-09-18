@@ -404,6 +404,31 @@ export function boilerexamsKey(course, beCourses) {
 }
 export const boilerexamsUrl = key => `https://boilerexams.com/courses/${encodeURIComponent(key)}/exams`;
 
+// Day view: place timed blocks [{id, start, end}] side by side when they overlap. Returns [{...b, col, cols}].
+export function layoutDayBlocks(blocks) {
+  const sorted = [...blocks].sort((a, b) => new Date(a.start) - new Date(b.start) || new Date(b.end) - new Date(a.end));
+  const out = [];
+  let cluster = [], clusterEnd = -Infinity;
+  const flush = () => {
+    const colEnds = [];
+    for (const b of cluster) {
+      let col = colEnds.findIndex(end => end <= +new Date(b.start));
+      if (col < 0) { col = colEnds.length; colEnds.push(0); }
+      colEnds[col] = +new Date(b.end);
+      b.col = col;
+    }
+    for (const b of cluster) out.push({ ...b, cols: colEnds.length });
+    cluster = [];
+  };
+  for (const b of sorted) {
+    if (+new Date(b.start) >= clusterEnd && cluster.length) flush(), clusterEnd = -Infinity;
+    cluster.push({ ...b });
+    clusterEnd = Math.max(clusterEnd, +new Date(b.end));
+  }
+  if (cluster.length) flush();
+  return out;
+}
+
 export const sundayOf = d => { d = startOfDay(d); return addDays(d, -d.getDay()); };
 
 // ---- optional features (⚙ Settings → Features) ----

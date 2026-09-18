@@ -262,6 +262,17 @@ test('Boilerexams matching: exact, lecture/lab section numbers, missing courses'
   assert.equal(L.boilerexamsUrl('MA16200'), 'https://boilerexams.com/courses/MA16200/exams');
 });
 
+test('day view: overlapping blocks go side by side, separate ones stay full width', () => {
+  const t = (h, m = 0) => new Date(2026, 8, 21, h, m).toISOString();
+  const out = Object.fromEntries(L.layoutDayBlocks([
+    { id: 'a', start: t(10, 30), end: t(11, 20) },
+    { id: 'b', start: t(11), end: t(12) },          // overlaps a
+    { id: 'c', start: t(11, 30), end: t(12, 30) },  // overlaps b (a has ended) → reuses a's column
+    { id: 'd', start: t(15, 30), end: t(16, 20) },  // alone
+  ]).map(b => [b.id, [b.col, b.cols]]));
+  assert.deepEqual(out, { a: [0, 2], b: [1, 2], c: [0, 2], d: [0, 1] });
+});
+
 test('Windows notification switch is read from reg output', async () => {
   const { parseRegDword } = await import('./toast.mjs');
   assert.equal(parseRegDword('HKEY_CURRENT_USER\\x\r\n    ToastEnabled    REG_DWORD    0x0\r\n', 'ToastEnabled'), '0');

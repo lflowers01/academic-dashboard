@@ -1,4 +1,4 @@
-import { isDone, isVisible, dayKey, addDays, linkify, courseColors, viewModel, parseLink, brightspaceOrigin, announcementUrl, assignmentListUrl, itemDays, parseMarkdown, layoutSpans, sundayOf, boilerexamsUrl, FEATURES, featureOn } from '/logic.mjs';
+import { isDone, isVisible, dayKey, addDays, linkify, courseColors, viewModel, parseLink, brightspaceOrigin, announcementUrl, assignmentListUrl, itemDays, parseMarkdown, layoutSpans, sundayOf, boilerexamsUrl, FEATURES, featureOn, layoutDayBlocks } from '/logic.mjs';
 
 const $ = s => document.querySelector(s);
 let data = null;
@@ -189,8 +189,11 @@ function renderTodo({ all }) {
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const midnight = d => { d = new Date(d); d.setHours(0, 0, 0, 0); return d; };
 
-function renderCalendar({ all, now }) {
+function renderCalendar(m) {
+  const { all, now } = m;
   const c = view.cursor;
+  for (const [id, mode] of [['#modeMonth', 'month'], ['#modeWeek', 'week'], ['#modeDay', 'day']]) $(id).setAttribute('aria-pressed', view.mode === mode);
+  if (view.mode === 'day') return renderDay(m);
   let start, days;
   if (view.mode === 'month') {
     const first = new Date(c.getFullYear(), c.getMonth(), 1);
@@ -204,8 +207,6 @@ function renderCalendar({ all, now }) {
     const end = addDays(start, 6);
     $('#calTitle').textContent = `${start.toLocaleDateString([], { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}`;
   }
-  $('#modeMonth').setAttribute('aria-pressed', view.mode === 'month');
-  $('#modeWeek').setAttribute('aria-pressed', view.mode === 'week');
 
   // Bucket by local day. byDay = everything on that day (for the day popup); singles = what gets a box in the cell.
   // Multi-day tasks are drawn once per week row as a bar across their days instead.
@@ -233,7 +234,7 @@ function renderCalendar({ all, now }) {
       const open = e => { if (e.target === e.currentTarget) openDay(d, all_); };
       kids.push(h('div', { class: ['day', view.mode === 'week' && 'week', view.mode === 'month' && d.getMonth() !== c.getMonth() && 'other', k === todayKey && 'is-today'].filter(Boolean).join(' '),
         style: { 'grid-column': String(col), 'grid-row': '1 / -1' }, onclick: open }));
-      kids.push(h('div', { class: `num${k === todayKey ? ' today' : ''}`, style: { 'grid-column': String(col), 'grid-row': '1' }, onclick: () => openDay(d, all_) },
+      kids.push(h('div', { class: `num${k === todayKey ? ' today' : ''}`, style: { 'grid-column': String(col), 'grid-row': '1' }, onclick: () => goToDay(d), title: 'Open this day' },
         view.mode === 'month' ? d.getDate() : ''));
       kids.push(h('div', { class: 'day-items', style: { 'grid-column': String(col), 'grid-row': String(lanes + 2) }, onclick: open },
         own.slice(0, limit).map(chipFor),
@@ -248,6 +249,77 @@ function renderCalendar({ all, now }) {
 
 // '8:00 PM–9:00 PM' → '8p–9p', '11:59 PM' → '11:59p' (month cells are narrow)
 const compactTime = t => t.split('–').map(p => p.replace(':00', '').replace(/\s?([AP])M/i, (_, x) => x.toLowerCase())).join('–');
+
+function goToDay(d) { view.mode = 'day'; view.cursor = new Date(d); pref('mode', 'day'); render(); }
+
+// ----- Day view: all-day row + hour timeline (blocks for things with a duration, pins for deadlines) -----
+const HOUR_PX = 48;
+// Optional features can add to the day (e.g. Google events): each returns { allDay: [...nodes], blocks: [{id,start,end,node}] }.
+const dayExtras = [];
+function renderDay({ all, now }) {
+  const d = new Date(view.cursor); d.setHours(0, 0, 0, 0);
+  const k = dayKey(d);
+  $('#calTitle').textContent = d.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+  const allDay = [], blocks = [], pins = [];
+  for (const i of all) {
+    if (i.due && (i.st !== 'expired' || i.done)) {
+      if (i.rangeStart) { if (itemDays(i).includes(k)) allDay.push(chipFor({ i, kind: 'due' })); }
+      else if (dayKey(i.due) === k) {
+        if (i.allDay) allDay.push(chipFor({ i, kind: 'due' }));
+        else if (i.kind === 'exam' && i.end) blocks.push({ id: i.id, start: i.due, end: i.end, node: () => chipFor({ i, kind: 'due' }) });
+        else pins.push({ at: new Date(i.due), node: chipFor({ i, kind: 'due' }) });
+      }
+    }
+    if (i.start && i.opens && dayKey(i.start) === k) pins.push({ at: new Date(i.start), node: chipFor({ i, kind: 'opens' }) });
+  }
+  for (const extra of dayExtras) { const x = extra(d); allDay.push(...(x.allDay || [])); blocks.push(...(x.blocks || [])); }
+
+  // Hours shown: 7 AM–11 PM, stretched to fit anything earlier/later.
+  const hourOf = t => { t = new Date(t); return t.getHours() + t.getMinutes() / 60; };
+  const times = [...pins.map(p => hourOf(p.at)), ...blocks.flatMap(b => [hourOf(b.start), dayKey(b.end) === k ? hourOf(b.end) : 24])];
+  const h0 = Math.max(0, Math.min(7, ...times.map(Math.floor)));
+  const h1 = Math.min(24, Math.max(23, ...times.map(t => Math.ceil(t + 0.25))));
+  const y = t => (Math.min(Math.max(hourOf(t), h0), h1) - h0) * HOUR_PX;
+
+  const lanes = { pins: pins.length > 0, blocks: blocks.length > 0 };
+  const pinStyle = lanes.blocks ? { left: '0', width: '42%' } : { left: '0', right: '0' };
+  const blockLeft = lanes.pins ? 44 : 0, blockWidth = 100 - blockLeft;
+
+  const grid = h('div', { class: 'day-grid', style: { height: `${(h1 - h0) * HOUR_PX}px` },
+    onclick: e => {
+      if (e.target !== e.currentTarget && !e.target.classList.contains('hour-line')) return;
+      const r = e.currentTarget.getBoundingClientRect();
+      const hr = Math.min(23, h0 + Math.floor((e.clientY - r.top) / HOUR_PX));
+      openTaskForm(null, k, `${String(hr).padStart(2, '0')}:00`);
+    } });
+  for (let hr = h0; hr < h1; hr++) grid.append(h('div', { class: 'hour-line', style: { top: `${(hr - h0) * HOUR_PX}px` } }));
+  // pins: several due at the same minute share one row
+  const byMinute = {};
+  for (const p of pins) (byMinute[p.at.getHours() * 60 + p.at.getMinutes()] ||= []).push(p);
+  for (const [min, ps] of Object.entries(byMinute))
+    grid.append(h('div', { class: 'pin-row', style: { top: `${y(ps[0].at) - 11}px`, ...pinStyle } }, h('span', { class: 'pin-tick' }), ps.map(p => p.node)));
+  for (const b of layoutDayBlocks(blocks)) {
+    const top = y(b.start), height = Math.max(22, (dayKey(b.end) === k ? y(b.end) : (h1 - h0) * HOUR_PX) - top);
+    const w = blockWidth / b.cols;
+    grid.append(h('div', { class: 'day-block', style: { top: `${top}px`, height: `${height}px`, left: `${blockLeft + b.col * w}%`, width: `calc(${w}% - 4px)` } }, b.node()));
+  }
+  if (k === dayKey(now) && hourOf(now) >= h0 && hourOf(now) <= h1) grid.append(h('div', { class: 'now-line', style: { top: `${y(now)}px` }, title: 'Now' }));
+
+  const labels = h('div', { class: 'day-hours' }, Array.from({ length: h1 - h0 }, (_, n) => {
+    const t = new Date(d); t.setHours(h0 + n);
+    return h('div', { style: { top: `${n * HOUR_PX}px` } }, t.toLocaleTimeString([], { hour: 'numeric' }));
+  }));
+  $('#calGrid').replaceChildren(h('div', { class: 'day-view' },
+    h('div', { class: 'day-allday' }, h('span', { class: 'muted' }, 'All day'), allDay.length ? allDay : h('span', { class: 'muted' }, '—')),
+    h('div', { class: 'day-body' }, labels, grid)));
+  // Scroll only the timeline (never the page), once per day you open: to "now" on today, else to the first item.
+  if (renderDay.scrolledFor !== k) {
+    renderDay.scrolledFor = k;
+    const firstY = k === dayKey(now) ? y(now) : Math.min(...pins.map(p => y(p.at)), ...blocks.map(b => y(b.start)), Infinity);
+    const body = $('#calGrid .day-body');
+    if (body && isFinite(firstY)) body.scrollTop = Math.max(0, firstY - body.clientHeight / 3);
+  }
+}
 
 // A multi-day task as one bar across its days in this week row; the title repeats on each row it continues onto.
 function spanChip(s) {
@@ -276,9 +348,9 @@ function chipFor({ i, kind }) {
     style: { '--c': colorOf(i) }, title: `${tagText(i)} · ${label}${time ? ' · ' + time : ''}${noteOf(i) ? '\n📝 ' + noteOf(i) : ''}`,
     onclick: e => { e.stopPropagation(); openItem(i); },
   }, kind === 'due' && i.exam ? h('span', { class: 'x' }, 'EXAM') : null,
-  view.mode === 'week' ? h('span', { class: 't' }, tagText(i)) : null, // month cells are narrow: color bar + legend identify the course
+  view.mode !== 'month' ? h('span', { class: 't' }, tagText(i)) : null, // month cells are narrow: color bar + legend identify the course
   view.mode === 'month' && time ? h('span', { class: 't' }, compactTime(time)) : null,
-  label, view.mode === 'week' && time ? ` · ${time}` : '', kind === 'due' && noteOf(i) ? h('span', { class: 'chip-note', 'aria-label': 'has a note' }, ' 📝') : null);
+  label, view.mode !== 'month' && time ? ` · ${time}` : '', kind === 'due' && noteOf(i) ? h('span', { class: 'chip-note', 'aria-label': 'has a note' }, ' 📝') : null);
 }
 
 function renderLegend({ visible }) {
@@ -414,7 +486,7 @@ function openDay(d, entries) {
   $('#dlgDay').showModal();
 }
 
-function openTaskForm(task, date) {
+function openTaskForm(task, date, time) {
   const f = $('#taskForm');
   f.reset();
   $('#taskFormTitle').textContent = task ? 'Edit task' : 'Add task';
@@ -423,7 +495,7 @@ function openTaskForm(task, date) {
     ...data.courses.filter(c => model().visible.has(c.id)).map(c => h('option', { value: c.id }, c.short)));
   f.title.value = task?.title || '';
   f.date.value = task?.date || date || dayKey(new Date());
-  f.time.value = task?.time || '';
+  f.time.value = task?.time || time || '';
   f.endDate.value = task?.endDate || '';
   sel.value = task?.courseId ?? '';
   f.notes.value = task?.notes || '';
@@ -554,9 +626,11 @@ $('#tabCal').onclick = () => { view.tab = 'cal'; pref('tab', 'cal'); render(); }
 $('#tabAnn').onclick = () => { view.tab = 'ann'; pref('tab', 'ann'); render(); };
 $('#modeMonth').onclick = () => { view.mode = 'month'; pref('mode', 'month'); render(); };
 $('#modeWeek').onclick = () => { view.mode = 'week'; pref('mode', 'week'); render(); };
+$('#modeDay').onclick = () => { view.mode = 'day'; pref('mode', 'day'); render(); };
 $('#today').onclick = () => { view.cursor = new Date(); render(); };
-$('#prev').onclick = () => { view.cursor = view.mode === 'month' ? new Date(view.cursor.getFullYear(), view.cursor.getMonth() - 1, 1) : addDays(view.cursor, -7); render(); };
-$('#next').onclick = () => { view.cursor = view.mode === 'month' ? new Date(view.cursor.getFullYear(), view.cursor.getMonth() + 1, 1) : addDays(view.cursor, 7); render(); };
+const step = dir => view.mode === 'month' ? new Date(view.cursor.getFullYear(), view.cursor.getMonth() + dir, 1) : addDays(view.cursor, dir * (view.mode === 'day' ? 1 : 7));
+$('#prev').onclick = () => { view.cursor = step(-1); render(); };
+$('#next').onclick = () => { view.cursor = step(1); render(); };
 $('#btnAdd').onclick = () => openTaskForm(null);
 $('#btnSettings').onclick = () => openSettings();
 $('#btnMarkRead').onclick = () => patchState({ seenAnnouncements: data.announcements.map(a => a.id) });
