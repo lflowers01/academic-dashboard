@@ -77,11 +77,14 @@ Latest release: https://github.com/lflowers01/academic-dashboard/releases/latest
 - "Port 4321 is taken" → `setx DASH_PORT 5055` (any free port), then `stop.cmd` and `start.cmd` in a **new** window (setx only affects new windows) and use http://localhost:5055. All scripts and the server honor `DASH_PORT`.
 - Logs: `data\server.log`. The user's cache, tasks and settings: `data\` (never share or commit it).
 
+## If the user wants Google Calendar
+Optional, off by default: ⚙ Settings → Features → Google Calendar → Connect. It runs `claude -p` headless (Haiku) with the claude.ai Google Calendar connector, so it needs Claude Code on PATH, signed in, and the connector connected at claude.ai → Settings → Connectors. Codex isn't supported for this feature yet. Settings shows exactly what's missing. Design: `spec-google-calendar.md`.
+
 ## Working on the code
 - The **Study on Boilerexams** button is automatic: the server fetches Boilerexams' course list (`api.boilerexams.com/courses`) on start-up, every 6 h, and whenever a new exam appears, then matches courses in `boilerexamsKey` (`logic.mjs`). Never hard-code a course list; if a course exists there, its exams get the button, otherwise none.
-- `npm test` must pass: `test.mjs` holds the unit tests, `test-server.mjs` runs the real server against `fixtures/fake-mcp.mjs`. `npm run demo` serves fictional data from `data-demo/`.
+- `npm test` must pass: `test.mjs` holds the unit tests, `test-server.mjs` runs the real server against `fixtures/fake-mcp.mjs`, `test-gcal.mjs` runs the Google bridge against `fixtures/fake-claude.mjs`. Browser tests: `test-e2e.mjs`, `test-e2e-gcal.mjs`. `npm run demo` serves fictional data from `data-demo/`.
 - `logic.mjs` is shared by the server, the browser and the tests (`viewModel`, status, exams, digest). Keep rules there, in one place.
-- Test hooks (env vars): `DASH_PORT`, `DASH_DATA`, `DASH_MCP_CMD` (JSON array command for a fake MCP server), `DASH_TOAST_LOG` (write notifications to a file), `DASH_NOTIFY_BLOCK` (pretend Windows blocks them), `DASH_TOTAL_TIMEOUT`, `DASH_COURSE_TIMEOUT`.
+- Test hooks (env vars): `DASH_PORT`, `DASH_DATA`, `DASH_MCP_CMD` (JSON array command for a fake MCP server), `DASH_TOAST_LOG` (write notifications to a file), `DASH_NOTIFY_BLOCK` (pretend Windows blocks them), `DASH_TOTAL_TIMEOUT`, `DASH_COURSE_TIMEOUT`, `DASH_GCAL_CMD` (fake Claude runner), `DASH_GCAL_TIMEOUT`.
 - The page builds DOM with `h()` / `textContent` only. **Never** use `innerHTML` with Brightspace content (announcements, instructions and titles are external input). Notification text is XML-escaped and passed to PowerShell through environment variables, never interpolated into the command.
 - Theme: pure black, high contrast, neutral white accents (no blue UI chrome), Purdue logo top-left at 26px, gold `#cfb991` exams and favicon. Course colors come from `PALETTE` in `logic.mjs` (bright, black text, ≥ 7:1 contrast).
 - Windows only by design (cmd/npx, taskkill, PowerShell toasts, .vbs/.cmd launchers).

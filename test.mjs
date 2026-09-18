@@ -273,6 +273,51 @@ test('day view: overlapping blocks go side by side, separate ones stay full widt
   assert.deepEqual(out, { a: [0, 2], b: [1, 2], c: [0, 2], d: [0, 1] });
 });
 
+test('google events: normalize (timed, all-day exclusive end, cancelled, HTML description)', () => {
+  const t = L.normalizeEvent({ id: 'x_20260921T123000Z', summary: 'MA 16200 Lecture', start: { dateTime: '2026-09-21T10:30:00-04:00' }, end: { dateTime: '2026-09-21T11:20:00-04:00' }, location: 'BHEE 129', description: 'Bring <b>calc</b><br>Room &amp; stuff', recurringEventId: 'x', htmlLink: 'https://calendar.google.com/e' }, 'cal1');
+  assert.equal(t.id, 'g:cal1:x_20260921T123000Z');
+  assert.equal(t.allDay, false);
+  assert.equal(t.recurring, true);
+  assert.equal(t.description, 'Bring calc\nRoom & stuff');
+  const a = L.normalizeEvent({ id: 'y', summary: 'Fall break', start: { date: '2026-10-12' }, end: { date: '2026-10-14' } }, 'cal2');
+  assert.equal(a.allDay, true);
+  assert.deepEqual(L.eventDays(a), ['2026-10-12', '2026-10-13']); // end date is exclusive
+  // the claude.ai connector's form (seen for real): time part, end inclusive and equal to the start
+  const c1 = L.normalizeEvent({ id: 'c', summary: 'Club fair', start: { date: '2026-10-14T00:00:00Z' }, end: { date: '2026-10-14T00:00:00Z' } }, 'cal2');
+  assert.deepEqual(L.eventDays(c1), ['2026-10-14']);
+  const c2 = L.normalizeEvent({ id: 'c', summary: 'Retreat', start: { date: '2026-10-14T00:00:00Z' }, end: { date: '2026-10-15T00:00:00Z' } }, 'cal2');
+  assert.deepEqual(L.eventDays(c2), ['2026-10-14', '2026-10-15']);
+  assert.equal(L.normalizeEvent({ id: 'z', status: 'cancelled', start: { date: '2026-10-12' } }, 'c'), null);
+  assert.equal(L.eventDays(t).length, 1);
+});
+
+test('google and brightspace duplicates: real CHM exam merges; lectures and other days do not', () => {
+  const shortById = { 1: 'CHM 115', 2: 'MA 162' };
+  const items = [
+    { id: 'ex:1:2026-09-24', kind: 'exam', exam: true, courseId: 1, title: 'Exam 1', due: new Date(2026, 8, 24, 20).toISOString() },
+    { id: 'bs:2:assignment:9', kind: 'assignment', courseId: 2, title: 'Written HW 3 Series', due: new Date(2026, 8, 22, 23, 59).toISOString() },
+  ];
+  const ev = (id, title, d) => ({ id, kind: 'gcal', title, start: d.toISOString(), end: new Date(+d + 3600e3).toISOString() });
+  const events = [
+    ev('g1', 'CHM 11510 Exam 1', new Date(2026, 8, 24, 20)),
+    ev('g2', 'CHM 11510 - General Chemistry I (Lecture)', new Date(2026, 8, 24, 15, 30)),
+    ev('g3', 'CHM 11510 Exam 2', new Date(2026, 9, 21, 20)),
+    ev('g4', 'MA 16200 Written HW 3 (series)', new Date(2026, 8, 22, 18)),
+    ev('g5', 'Purdue Orbital meeting', new Date(2026, 8, 24, 20)),
+  ];
+  const { byItem, merged } = L.matchGoogle(items, events, shortById);
+  assert.equal(byItem.get('ex:1:2026-09-24').id, 'g1');
+  assert.equal(byItem.get('bs:2:assignment:9').id, 'g4');
+  assert.deepEqual([...merged].sort(), ['g1', 'g4']);
+});
+
+test('local ISO keeps the local offset', () => {
+  const d = new Date(2026, 8, 24, 20, 0);
+  const iso = L.localIso(d);
+  assert.match(iso, /^2026-09-24T20:00:00[+-]\d{2}:\d{2}$/);
+  assert.equal(+new Date(iso), +d);
+});
+
 test('Windows notification switch is read from reg output', async () => {
   const { parseRegDword } = await import('./toast.mjs');
   assert.equal(parseRegDword('HKEY_CURRENT_USER\\x\r\n    ToastEnabled    REG_DWORD    0x0\r\n', 'ToastEnabled'), '0');

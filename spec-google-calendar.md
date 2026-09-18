@@ -40,14 +40,18 @@ The old 🔔 and Courses header buttons are removed (their content lives in Sett
   - not signed in → "Run `claude` once in a terminal to sign in."
 - **Privacy line:** "Syncing passes your selected calendars' events through Claude (your account, Haiku model)."
 - **Calendars:** the list from the connector. Each has **Show** and **Allow edits** switches (**both off by default**; *Allow edits* requires *Show*) and a **color** swatch (auto-assigned, changeable; the connector doesn't expose Google's own colors).
+- **To-do** switch per calendar (default **off**, and off whenever the calendar isn't shown): whether its events appear in the Today strip on the left.
+- Legend badges (courses and Google calendars) are buttons: a click hides that course/calendar on the calendar view only (to-do list unaffected), dimmed and struck through until clicked again; saved in `state.calendarHidden`.
 - **Show Google events on the calendar** (default on) and **Show "Today" schedule strip** (default on).
 - **Include today's Google events in the Windows digest** (default **off**).
-- **Sync window:** 2 weeks back → 8 weeks ahead (*design*, keeps each sync small). Navigating outside it shows a subtle "Load Google events for October" button (never automatic, since it costs usage).
+- **Sync window:** 1 week back → 6 weeks ahead (`GCAL_WINDOW`; *design*, keeps each sync small). Navigating outside it shows a subtle "Load Google events for October" button (never automatic, since it costs usage).
 
 ## 4. Sync
 - **When:** on start-up, every **6 h**, right after any change made from the dashboard (that calendar only), and on **Sync now**. Independent of the 3-hour Brightspace refresh.
-- **What:** for each calendar with *Show* on: `list_events(calendarId, startTime, endTime, pageSize 250, orderBy startTime)`, following `nextPageToken` pages. Cancelled events are dropped.
+- **What:** for each calendar with *Show* on: `list_events(calendarId, startTime, endTime, pageSize 50 (real events are ~1.3k characters each; the bridge also raises MAX_MCP_OUTPUT_TOKENS to 60k, as the default 25k cap failed at 100 events), orderBy startTime)`, following `nextPageToken` pages. Cancelled events are dropped.
 - **Stored** in `data/gcal.json` (crash-safe like the rest): calendars, normalized events, window, `syncedAt`, `lastError`, `lastCostUsd`. Failures keep the last good events and show the error in the status line only (no global banner, *design*: non-intrusive).
+- **After a write** the cache is updated from Google's own reply (the created/updated event, or the confirmed delete), so no extra sync run is needed.
+- **Results of actions** (saved, deleted, loaded, or an error) appear as a small notice next to the calendar title: successes fade after 8 s, errors stay until dismissed with ✕. A failed save reopens the form with what was typed.
 - **Normalized event:** `{ id: "g:<calendarId>:<eventId>", eventId, calendarId, title, start, end, allDay, location, description (text, HTML stripped), htmlLink, recurring (bool), updated }`.
 
 ## 5. How Google events look (clearly different from Brightspace)
@@ -102,7 +106,7 @@ Clicking an empty hour creates a task (or event, when Google is on) at that time
 3. *Model doesn't call the tool / loops*: max-turns cap, and the bridge checks a matching `tool_result` exists; otherwise the run fails with "the assistant didn't complete the call" and the error is shown.
 4. *Time zones*: send ISO times with the user's UTC offset; read back `start.dateTime`/`start.date`; all-day uses dates (end exclusive per Google), rendered in local time.
 5. *Recurring*: occurrences have unique instance ids (`…_20260921T123000Z`); edits/deletes target the occurrence only; the UI says so.
-6. *Stale edits*: Google is the source of truth; after any write, that calendar resyncs.
+6. *Stale edits*: Google is the source of truth; after any write the cache takes Google's reply, and the 6 h sync picks up changes made elsewhere.
 7. *Feature off*: no runs, no routes doing work, no UI (the filter, strip, legend group and actions all disappear); `data/gcal.json` is kept so re-enabling is instant.
 8. *Hidden launch*: the server runs hidden at login; the bridge resolves `claude` via `where claude` (handles `.exe` and `.cmd`) and passes the user's environment so the Claude login is found.
 9. *Rollback*: Settings + Day view are separate commits from the Google feature; the Google feature is a single commit, revertable with `git revert`.
@@ -110,4 +114,5 @@ Clicking an empty hour creates a task (or event, when Google is on) at that time
 ## 14. Tests
 - Unit: normalization, merge rules (incl. the real "CHM 11510 Exam 1" case and non-matches), filter, day-view layout (overlaps, all-day, pins), argument verification.
 - Integration (fake runner): sync incl. pagination, cancelled events, per-calendar Show; create/update/delete round-trips; **writes rejected on non-editable calendars**; runner missing / connector error / timeout; queue ordering; feature off → nothing runs.
+- Files: `test.mjs` (unit), `test-gcal.mjs` (integration, part of `npm test`), `test-e2e-gcal.mjs` (browser, demo mode with `fixtures/fake-claude.mjs`).
 - Browser: Settings toggles, filter All/Brightspace/Google, outlined vs filled chips, Today strip, create/edit/delete flow with pending state, add-from-item, day view.

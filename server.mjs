@@ -4,15 +4,19 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { buildItems, refreshDue, nextSlot, shortName, currentTerm, viewModel, digestItems, digestMessage, digestLink, boilerexamsKey, FEATURES } from './logic.mjs';
+import { createGcal } from './gcal-routes.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURE = process.argv.includes('--fixture');
+// Demo mode: Google Calendar talks to a fake Claude so it works offline with made-up calendars.
+if (FIXTURE && !process.env.DASH_GCAL_CMD) process.env.DASH_GCAL_CMD = JSON.stringify([process.execPath, path.join(ROOT, 'fixtures', 'fake-claude.mjs')]);
 // DASH_PORT / DASH_DATA exist for tests and for anyone whose port 4321 is taken.
 const PORT = Number(process.env.DASH_PORT) || 4321;
 const DATA = process.env.DASH_DATA ? path.resolve(process.env.DASH_DATA) : path.join(ROOT, FIXTURE ? 'data-demo' : 'data'); // demo never touches real data
 const URL_SELF = `http://localhost:${PORT}/`;
 const RETRY_MIN = [5, 15, 30];
 fs.mkdirSync(DATA, { recursive: true });
+if (FIXTURE && !process.env.FAKE_GCAL_STATE) process.env.FAKE_GCAL_STATE = path.join(DATA, 'fake-gcal.json'); // demo's fake Google Calendar
 
 // ---------- log (capped) ----------
 const LOG = path.join(DATA, 'server.log');
@@ -73,7 +77,7 @@ let tasks = readJson('tasks.json', []);
 if (!Array.isArray(tasks)) tasks = [];
 // notes: your own notes on Brightspace items, by item id. Never pruned, so a note survives an item briefly vanishing.
 // features: optional features switched on in ⚙ Settings (all off by default).
-const STATE_DEFAULTS = { done: {}, seenAnnouncements: [], hiddenCourses: {}, notes: {}, features: {}, notifications: true, lastDigest: null };
+const STATE_DEFAULTS = { done: {}, seenAnnouncements: [], hiddenCourses: {}, calendarHidden: {}, notes: {}, features: {}, notifications: true, lastDigest: null };
 let state = { ...STATE_DEFAULTS, ...readJson('state.json', {}) };
 delete state.notified; // from the earlier per-item notification design
 const meta = { lastAttemptAt: null, lastError: null, paused: false, retryIndex: 0, nextRetryAt: null, refreshing: null, notifyBlocked: null };
@@ -110,6 +114,9 @@ function refreshBoilerexams(reason, force = false) {
 }
 const examIds = () => new Set(itemsOf().filter(i => i.exam).map(i => i.id));
 
+// ---------- Google Calendar (optional feature, gcal-routes.mjs) ----------
+const gcal = createGcal({ state, readJson, writeJson, log, itemsOf: () => itemsOf(), courses: () => coursesOf(cache?.raw) });
+
 // ---------- view helpers ----------
 const coursesOf = raw => (raw?.courses || []).map(c => ({ id: c.id, name: c.name, code: c.code, short: shortName(c) }));
 function itemsOf() {
@@ -125,7 +132,9 @@ async function sendDigest(reason) {
   const { all } = viewModel({ items: itemsOf(), tasks, courses, state, term: currentTerm(courses) }, now);
   const due = digestItems(all, now);
   const short = Object.fromEntries(courses.map(c => [c.id, c.short]));
-  const msg = digestMessage(due, now, i => short[i.courseId] || '');
+  let msg = digestMessage(due, now, i => short[i.courseId] || '');
+  const events = gcal.digestLine(now); // only when the user turned "include Google events" on
+  if (events) msg = msg ? { ...msg, lines: [...msg.lines, events] } : { title: 'Today', lines: [events] };
   if (!msg) return log(`digest (${reason}): nothing due today`);
   // Start-up and the first refresh happen together; don't send the same digest twice within 90 minutes.
   const sig = JSON.stringify(msg);
@@ -231,6 +240,7 @@ function payload() {
     state,
     // course id → Boilerexams key, for courses that exist there
     boilerexams: Object.fromEntries(courses.map(c => [c.id, boilerexamsKey(c, boilerexams.courses)]).filter(([, k]) => k)),
+    gcal: gcal.payload(), // null unless the Google Calendar feature is on
   };
 }
 
@@ -309,6 +319,8 @@ const server = http.createServer(async (req, res) => {
       const b = await readBody(req);
       for (const [k, v] of Object.entries(b.done || {})) v === null ? delete state.done[k] : (state.done[k] = !!v);
       for (const [k, v] of Object.entries(b.hiddenCourses || {})) v === null ? delete state.hiddenCourses[k] : (state.hiddenCourses[k] = !!v);
+      // legend toggles: courses (or Google calendars) hidden on the calendar view only
+      for (const [k, v] of Object.entries(b.calendarHidden || {})) { const key = String(k).slice(0, 300); v ? (state.calendarHidden[key] = true) : delete state.calendarHidden[key]; }
       for (const [k, v] of Object.entries(b.notes || {})) {
         const key = String(k).slice(0, 200), text = v == null ? '' : String(v).slice(0, 5000);
         text.trim() ? (state.notes[key] = text) : delete state.notes[key]; // empty note = no note
@@ -332,6 +344,8 @@ const server = http.createServer(async (req, res) => {
       openNotificationSettings();
       return send(res, 200, { ok: true });
     }
+
+    if (await gcal.handle(req, res, p, { readBody, send })) return;
 
     if (p === '/api/signin' && req.method === 'POST') {
       const { openSignInWindow } = await import('./brightspace.mjs');
@@ -361,5 +375,6 @@ server.listen(PORT, '127.0.0.1', () => {
   checkNotifyBlock();
   refreshBoilerexams('start-up');
   setInterval(checkNotifyBlock, 5 * 60_000);
+  gcal.tick(); setInterval(() => gcal.tick(), 60_000); // Google Calendar sync schedule (no-op while the feature is off)
   if (!FIXTURE) { tick(); setInterval(tick, 60_000); }
 });

@@ -433,8 +433,80 @@ export const sundayOf = d => { d = startOfDay(d); return addDays(d, -d.getDay())
 
 // ---- optional features (⚙ Settings → Features) ----
 // Each entry is off unless the user turns it on (state.features[id] === true). Add future features here.
-export const FEATURES = [];
+export const GCAL_WINDOW = { back: 7, ahead: 42 }; // days around today that a sync reads
+export const FEATURES = [
+  { id: 'googleCalendar', name: 'Google Calendar', description: `See and manage events from Google calendars you choose, next to your Brightspace work. Syncs events from ${GCAL_WINDOW.back / 7} week back to ${GCAL_WINDOW.ahead / 7} weeks ahead; other months load when you ask. Uses the Google Calendar connector in Claude (Claude Code required).` },
+];
 export const featureOn = (state, id) => state?.features?.[id] === true && FEATURES.some(f => f.id === id);
+
+// ---- Google Calendar (optional feature; see spec-google-calendar.md) ----
+const pad2 = n => String(n).padStart(2, '0');
+// Local ISO with offset, e.g. 2026-09-24T20:00:00-04:00 (what the connector expects).
+export function localIso(d) {
+  d = new Date(d);
+  const off = -d.getTimezoneOffset(), sign = off >= 0 ? '+' : '-', a = Math.abs(off);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}:00${sign}${pad2(Math.floor(a / 60))}:${pad2(a % 60)}`;
+}
+const htmlToText = s => String(s || '')
+  .replace(/<br\s*\/?>|<\/p>|<\/li>|<\/div>/gi, '\n').replace(/<[^>]*>/g, '')
+  .replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&')
+  .replace(/\n{3,}/g, '\n\n').trim();
+const dateOnly = s => { const [y, m, d] = s.slice(0, 10).split('-').map(Number); return new Date(y, m - 1, d); };
+
+// Connector event → dashboard event (null for cancelled). All-day end dates become exclusive: Google's API
+// sends "2026-10-15" (exclusive) for a one-day event on the 14th, but the claude.ai connector sends
+// "2026-10-14T00:00:00Z" (inclusive, same as the start), so a date with a time part gets one day added.
+export function normalizeEvent(raw, calendarId) {
+  if (!raw || raw.status === 'cancelled' || !raw.start) return null;
+  const allDay = !raw.start.dateTime && !!raw.start.date;
+  const start = allDay ? dateOnly(raw.start.date) : new Date(raw.start.dateTime);
+  const allDayEnd = d => addDays(dateOnly(d), d.length > 10 ? 1 : 0);
+  let end = raw.end ? (allDay ? allDayEnd(raw.end.date || raw.start.date) : new Date(raw.end.dateTime || raw.end.date)) : new Date(+start + 3600_000);
+  if (allDay && end <= start) end = addDays(start, 1);
+  if (isNaN(start) || isNaN(end)) return null;
+  return {
+    id: `g:${calendarId}:${raw.id}`, eventId: raw.id, calendarId, kind: 'gcal',
+    title: raw.summary || '(no title)', start: start.toISOString(), end: end.toISOString(), allDay,
+    location: raw.location || '', description: htmlToText(raw.description), htmlLink: raw.htmlLink || null,
+    recurring: !!raw.recurringEventId, updated: raw.updated || null,
+  };
+}
+
+// Local days an event covers (all-day: [start, end) exclusive; timed: each day it touches).
+export function eventDays(ev) {
+  const out = [];
+  const last = ev.allDay ? addDays(new Date(ev.end), -1) : new Date(new Date(ev.end) - 1);
+  for (let d = startOfDay(ev.start); d <= last && out.length < 62; d = addDays(d, 1)) out.push(dayKey(d));
+  return out.length ? out : [dayKey(ev.start)];
+}
+
+// "CHM 11510 Exam 1" / "CHM115" / "MA 16200 lecture" → "CHM115" (subject + first 3 digits)
+export const titleCourseKey = t => { const m = String(t || '').toUpperCase().match(/\b([A-Z]{2,5})\s?(\d{3})(\d{2})?\b/); return m ? m[1] + m[2] : null; };
+export const shortCourseKey = short => { const m = String(short || '').toUpperCase().match(/^([A-Z]{2,5})\s(\d{3})\b/); return m ? m[1] + m[2] : null; };
+const STOP = new Set(['the', 'and', 'for', 'due', 'with', 'from', 'lecture', 'lec', 'lab', 'section', 'sec']);
+const words = t => new Set(String(t || '').toLowerCase().replace(/\b[a-z]{2,5}\s?\d{3,5}\b/g, ' ').split(/[^a-z0-9]+/).filter(w => w.length >= 3 && !STOP.has(w)));
+
+// A Google event and a Brightspace item are the same thing when: same local day, the event title names the
+// item's course, and either both are exams or the titles share at least 60% of their meaningful words.
+// Returns { byItem: Map(itemId → event), merged: Set(eventId) }; each event merges with at most one item.
+export function matchGoogle(items, events, shortById) {
+  const byItem = new Map(), merged = new Set();
+  for (const ev of events) {
+    const key = titleCourseKey(ev.title);
+    if (!key) continue;
+    const day = dayKey(ev.start);
+    const cands = items.filter(i => i.kind !== 'gcal' && i.due && !byItem.has(i.id) && dayKey(i.due) === day && shortCourseKey(shortById[i.courseId]) === key);
+    const examEv = /\b(exam|midterm|final)\b/i.test(ev.title);
+    const pick = cands.find(i => i.exam && examEv) || cands.find(i => {
+      const a = words(i.title), b = words(ev.title);
+      if (!a.size || !b.size) return false;
+      let common = 0; for (const w of a) if (b.has(w)) common++;
+      return common / Math.min(a.size, b.size) >= 0.6;
+    });
+    if (pick) { byItem.set(pick.id, ev); merged.add(ev.id); }
+  }
+  return { byItem, merged };
+}
 
 // Split plain text into text/link segments. Rendering uses textContent, so no HTML is ever interpreted.
 export function linkify(text) {

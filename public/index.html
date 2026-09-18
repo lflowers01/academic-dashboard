@@ -31,6 +31,7 @@
         <h2>To-do</h2>
         <button id="btnAdd" type="button" class="primary">+ Add task</button>
       </div>
+      <div id="todoTop"></div>
       <div id="todoList"></div>
     </aside>
     <section class="calendar">
@@ -40,6 +41,7 @@
           <button id="today" type="button">Today</button>
           <button id="next" type="button" aria-label="Next">›</button>
           <h2 id="calTitle"></h2>
+          <div id="calExtras" class="cal-extras"></div>
         </div>
         <div class="seg" role="group" aria-label="Calendar view">
           <button id="modeMonth" type="button" aria-pressed="true">Month</button>
@@ -91,20 +93,21 @@
 </dialog>
 
 <dialog id="dlgItem"><div id="itemBody"></div><form method="dialog" class="dlg-actions"><span class="spacer"></span><button>Close</button></form></dialog>
-<dialog id="dlgDay"><div id="dayBody"></div><form method="dialog" class="dlg-actions"><button type="button" id="dayAdd">+ Add task this day</button><span class="spacer"></span><button>Close</button></form></dialog>
+
 
 
 <dialog id="dlgSettings" class="settings">
   <div class="settings-head"><h2>Settings</h2><form method="dialog"><button class="primary">Done</button></form></div>
   <nav class="settings-nav" role="tablist" id="settingsNav">
-    <button type="button" role="tab" data-sec="features">Features</button>
-    <button type="button" role="tab" data-sec="notifications">Notifications</button>
     <button type="button" role="tab" data-sec="courses">Courses</button>
+    <button type="button" role="tab" data-sec="notifications">Notifications</button>
+    <button type="button" role="tab" data-sec="features">Features</button>
   </nav>
   <section class="settings-sec" data-sec="features">
     <p class="muted">Optional extras. Everything here is off unless you turn it on, and turning it off hides it again.</p>
     <div id="featureList"></div>
   </section>
+  <section class="settings-sec" id="featureSection" hidden></section>
   <section class="settings-sec" data-sec="notifications">
   
   <p class="muted">When Windows starts and after every 3-hour refresh, you get one notification listing what's due <strong>today</strong> and <strong>early tomorrow morning</strong> (before 10 AM). Nothing due → no notification. They work even when this page is closed, as long as the dashboard is running.</p>
@@ -126,5 +129,6 @@
 </dialog>
 
 <script type="module" src="/app.js"></script>
+<script type="module" src="/gcal-ui.js"></script>
 </body>
 </html>

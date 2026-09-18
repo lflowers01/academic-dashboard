@@ -63,16 +63,18 @@ async function run(browserName) {
       assert.equal(await page.locator('#calGrid .dow').count(), 7);
       await page.click('#next'); await page.click('#prev'); await page.click('#today');
       assert.ok(await page.locator('#calGrid .day.is-today').count() === 1);
+      assert.equal(await page.locator('#calGrid .now-mark').count(), 1, 'week view: one now line');
       await page.click('#modeMonth');
+      assert.equal(await page.locator('#calGrid .now-mark').count(), 0, 'month view: none');
     });
 
-    await step('+N more popup lists real rows', async () => {
+    await step('+N more opens that day in Day view', async () => {
       const more = page.locator('#calGrid .more').first();
       if (await more.count()) {
         await more.click();
-        assert.ok(await page.locator('#dlgDay .item').count() > 3);
-        assert.ok(clean(await page.innerText('#dlgDay')));
-        await page.keyboard.press('Escape');
+        assert.equal(await page.getAttribute('#modeDay', 'aria-pressed'), 'true');
+        assert.ok(await page.locator('#calGrid .chip').count() > 3);
+        await page.click('#today'); await page.click('#modeMonth');
       }
     });
 
@@ -349,14 +351,12 @@ async function run(browserName) {
       await page.keyboard.press('Escape');
     });
 
-    await step('clicking an empty day opens the add-task form for that day', async () => {
+    await step('clicking empty space in a day opens that day in Day view', async () => {
       await page.click('#modeMonth');
-      const empty = page.locator('#calGrid .day-items:not(:has(.chip, .more))').first();
-      await empty.click();
-      assert.equal(await page.$eval('#dlgTask', d => d.open), true);
-      assert.match(await page.inputValue('#taskForm input[name=date]'), /^\d{4}-\d{2}-\d{2}$/);
-      await page.keyboard.press('Escape');
-      assert.equal((await (await fetch(srv.base + '/api/data')).json()).tasks.length, 0);
+      await page.locator('#calGrid .day-items').nth(10).click({ position: { x: 5, y: 60 } });
+      assert.equal(await page.getAttribute('#modeDay', 'aria-pressed'), 'true');
+      assert.equal(await page.$eval('#dlgTask', d => d.open), false);
+      await page.click('#today'); await page.click('#modeMonth');
     });
 
     await step('notification links open an item / highlight items', async () => {

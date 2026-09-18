@@ -66,16 +66,20 @@ When it's done, bookmark **http://localhost:4321**.
 | Mark something done | Tick its checkbox (untick to undo) |
 | See details / instructions | Click the item |
 | Add your own notes to an assignment or exam | Click it and type in **My notes**. Markdown works (**bold**, lists, `- [ ]` checklists, links). Saves automatically; 📝 marks items with notes |
-| Add your own task | **+ Add task**, press **N**, or click an empty calendar day. Add an **End date** for something that spans days (e.g. Sat–Sun). Tick **This is an exam** for exams. |
+| Add your own task | **+ Add task**, press **N**, or click an empty hour in Day view. Add an **End date** for something that spans days (e.g. Sat–Sun). Tick **This is an exam** for exams. |
 | Edit or delete your task | Click it |
 | Jump to today | **Today**, or press **T** |
-| See one day hour by hour | **Day** (or click a date number in Month/Week) |
+| See one day hour by hour | **Day**, or click a day (its number, empty space, or **+N more**) in Month/Week |
 | Hide or show a course | **⚙ Settings → Courses** |
+| Hide a course (or Google calendar) on the calendar only | Click its badge above the calendar; click again to bring it back |
 | Notifications on/off, or a test | **⚙ Settings → Notifications** |
 | Turn optional features on or off | **⚙ Settings → Features** |
+| Show Google Calendar events (optional) | **⚙ Settings → Features → Google Calendar**, see below |
 | Update right now | **↻ Refresh** (about 2 minutes) |
 
 **Colors:** each course has its own color. Urgency always appears as a labeled badge: red **OVERDUE**, orange **TODAY**, yellow **TOMORROW**. **Gold = exam.** A dashed outline on the calendar means "**opens** at this time".
+
+**Google Calendar (optional, off by default):** shows events from the Google calendars you pick next to your Brightspace work, outlined (◷) so they never look like assignments. **All · Brightspace · Google** above the calendar switches between them. You can create, edit and delete events on calendars where you turn on **Allow edits**, and send an assignment or exam to Google from its details. It needs [Claude Code](https://claude.com/claude-code) signed in to a Claude account with the **Google Calendar connector** connected (claude.ai → Settings → Connectors). It syncs every 6 hours and on **Sync now**, using a small amount of your Claude usage (about $0.02–0.10 per sync on the cheapest model). Your events pass through Claude; nothing else leaves your PC.
 
 **Study on Boilerexams:** exams in courses that [Boilerexams](https://boilerexams.com/courses) covers get a gold **Study on Boilerexams** button in their details, linking to that course's practice exams. It's checked automatically, including for new exams.
 

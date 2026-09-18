@@ -9,6 +9,7 @@ const view = { tab: pref('tab') || 'cal', mode: pref('mode') || 'month', cursor:
 function h(tag, attrs = {}, ...kids) {
   const el = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
+    if (k.startsWith('aria-') && typeof v === 'boolean') { el.setAttribute(k, String(v)); continue; } // aria wants "true"/"false", not ""
     if (v == null || v === false) continue;
     if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
     else if (k === 'style') for (const [sk, sv] of Object.entries(v)) { if (sv != null) el.style.setProperty(sk, sv); }
@@ -40,8 +41,26 @@ function model() {
   const m = viewModel(data, new Date());
   data.colors = courseColors(data.courses, m.visible, data.term);
   courseById = Object.fromEntries(data.courses.map(c => [c.id, { ...c, color: data.colors[c.id] }]));
+  for (const f of hooks.model) f(m, data);
+  // what the calendar shows of your Brightspace items and tasks (features can filter it, e.g. "Google only")
+  m.calAll = m.all.filter(i => !calHidden(i.courseId) && hooks.itemFilter.every(f => f(m, i)));
   return m;
 }
+
+// ---------- extension points for optional features (e.g. public/gcal-ui.js). All empty unless a feature is on. ----------
+const hooks = {
+  model: [],        // (m, data) → void: add to the view model
+  itemFilter: [],   // (m, item) → bool: keep a Brightspace item/task on the calendar?
+  calendar: [],     // (m) → { singles: [{ day, at, node }], spans: [{ id, startDay, endDay, node(seg) }] }
+  day: [],          // (m, date) → { allDay: [nodes], blocks: [{ id, start, end, node() }] }
+  todoTop: [],      // (m) → node | null, shown above the to-do list
+  rowBadges: [],    // (item, m) → [nodes] for to-do rows
+  itemDetails: [],  // (item, m) → [nodes] in the details window
+  add: [],          // ({ date, time }) → true if the feature handled "add" (e.g. offered Task / Event)
+  settings: [],     // [{ id, title, visible: () → bool, render: container → void }]
+  toolbar: [],      // (m) → [nodes] next to the calendar title
+  legend: [],       // (m) → [nodes] added to the course legend
+};
 const courseOf = i => courseById[i.courseId];
 const colorOf = i => courseOf(i)?.color || '#cbd5e1';
 const tagText = i => courseOf(i)?.short || 'Personal';
@@ -73,14 +92,18 @@ async function patchState(patch) {
 }
 
 // ---------- render ----------
+let lastModel = null;
 function render() {
   if (!data) return;
-  const m = model();
+  const m = lastModel = model();
   renderStatus();
   renderBanner(m);
   renderTabs();
   renderTodo(m);
+  $('#todoTop').replaceChildren(...hooks.todoTop.map(f => f(m)).filter(Boolean));
   renderCalendar(m);
+  $('#calExtras').replaceChildren(...hooks.toolbar.flatMap(f => f(m) || []));
+  renderSettingsNav();
   renderLegend(m);
   renderAnnouncements(m);
   renderNotifyButton();
@@ -151,6 +174,7 @@ function itemRow(i, { showDay = false } = {}) {
   if (i.kind === 'task') badges.push(h('span', { title: 'Manual task' }, '✎'));
   if (i.done && (i.submitted || i.graded) && typeof data.state.done[i.id] !== 'boolean') badges.push(h('span', {}, i.submitted ? '✓ submitted' : '✓ graded'));
   if (noteOf(i)) badges.push(h('span', { class: 'note-mark', title: noteOf(i) }, '📝 note'));
+  for (const f of hooks.rowBadges) badges.push(...(f(i, lastModel) || []));
 
   return h('div', { class: `item${i.done ? ' done' : ''}${i.exam ? ' exam' : ''}`, 'data-id': i.id },
     h('input', { type: 'checkbox', checked: i.done, 'aria-label': `Mark “${i.title}” done`, onchange: e => toggleDone(i, e.target.checked) }),
@@ -190,7 +214,7 @@ const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const midnight = d => { d = new Date(d); d.setHours(0, 0, 0, 0); return d; };
 
 function renderCalendar(m) {
-  const { all, now } = m;
+  const { calAll: all, now } = m;
   const c = view.cursor;
   for (const [id, mode] of [['#modeMonth', 'month'], ['#modeWeek', 'week'], ['#modeDay', 'day']]) $(id).setAttribute('aria-pressed', view.mode === mode);
   if (view.mode === 'day') return renderDay(m);
@@ -208,18 +232,25 @@ function renderCalendar(m) {
     $('#calTitle').textContent = `${start.toLocaleDateString([], { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}`;
   }
 
-  // Bucket by local day. byDay = everything on that day (for the day popup); singles = what gets a box in the cell.
+  // Bucket by local day: singles = what gets a box in the cell.
   // Multi-day tasks are drawn once per week row as a bar across their days instead.
-  const byDay = {}, singles = {}, spans = [];
+  const singles = {}, spans = [];
   const push = (map, k, v) => (map[k] ||= []).push(v);
   for (const i of all) {
     if (i.due && (i.st !== 'expired' || i.done)) {
-      for (const k of itemDays(i)) push(byDay, k, { i, kind: 'due' });
       if (i.rangeStart) spans.push({ id: i.id, i, startDay: midnight(i.rangeStart), endDay: midnight(i.due) });
       else push(singles, dayKey(i.due), { i, kind: 'due' });
     }
-    if (i.start && i.opens) { push(byDay, dayKey(i.start), { i, kind: 'opens' }); push(singles, dayKey(i.start), { i, kind: 'opens' }); }
+    if (i.start && i.opens) push(singles, dayKey(i.start), { i, kind: 'opens' });
   }
+  for (const f of hooks.calendar) {
+    const x = f(m) || {};
+    for (const s of x.singles || []) push(singles, s.day, s);
+    for (const s of x.spans || []) spans.push(s);
+  }
+  // within a day: by time, so feature entries and Brightspace items interleave correctly
+  const at = e => +(e.at || (e.kind === 'opens' ? new Date(e.i.start) : new Date(e.i?.due || 0)));
+  for (const k in singles) singles[k].sort((a, b) => at(a) - at(b));
   const todayKey = dayKey(now);
   const limit = view.mode === 'month' ? 3 : Infinity;
   const rows = [];
@@ -230,21 +261,29 @@ function renderCalendar(m) {
     const kids = [];
     for (let n = 0; n < 7; n++) {
       const d = addDays(ws, n), k = dayKey(d), col = n + 1;
-      const all_ = byDay[k] || [], own = singles[k] || [];
-      const open = e => { if (e.target === e.currentTarget) openDay(d, all_); };
+      const own = singles[k] || [];
+      const open = e => { if (e.target === e.currentTarget) goToDay(d); }; // empty space → that day's Day view
       kids.push(h('div', { class: ['day', view.mode === 'week' && 'week', view.mode === 'month' && d.getMonth() !== c.getMonth() && 'other', k === todayKey && 'is-today'].filter(Boolean).join(' '),
         style: { 'grid-column': String(col), 'grid-row': '1 / -1' }, onclick: open }));
       kids.push(h('div', { class: `num${k === todayKey ? ' today' : ''}`, style: { 'grid-column': String(col), 'grid-row': '1' }, onclick: () => goToDay(d), title: 'Open this day' },
         view.mode === 'month' ? d.getDate() : ''));
       kids.push(h('div', { class: 'day-items', style: { 'grid-column': String(col), 'grid-row': String(lanes + 2) }, onclick: open },
-        own.slice(0, limit).map(chipFor),
-        own.length > limit ? h('button', { class: 'more', type: 'button', onclick: () => openDay(d, all_) }, `+${own.length - limit} more`) : null));
+        withNowMark(own.slice(0, limit).map(e => e.node || chipFor(e)), view.mode === 'week' && k === todayKey ? own.findIndex(e => at(e) > now) : null),
+        own.length > limit ? h('button', { class: 'more', type: 'button', onclick: () => goToDay(d) }, `+${own.length - limit} more`) : null));
     }
-    for (const s of segs) kids.push(spanChip(s));
+    for (const s of segs) kids.push(s.node ? s.node(s) : spanChip(s));
     rows.push(h('div', { class: `week-row${view.mode === 'week' ? ' tall' : ''}`, style: { 'grid-template-rows': `${view.mode === 'month' ? '22px' : '4px'} ${lanes ? `repeat(${lanes}, 26px) ` : ''}1fr` } }, kids));
   }
   const heads = DOW.map((w, n) => h('div', { class: 'dow' }, view.mode === 'week' ? `${w} ${addDays(start, n).getMonth() + 1}/${addDays(start, n).getDate()}` : w));
   $('#calGrid').replaceChildren(h('div', { class: 'cal-head' }, heads), ...rows);
+}
+
+// Week view, today's cell: a red "now" line between what's past and what's next (index = first future entry, -1 = all past).
+function withNowMark(nodes, index) {
+  if (index == null) return nodes;
+  const mark = h('div', { class: 'now-mark', title: `Now · ${fmtTime(new Date())}`, 'aria-label': 'Now' });
+  nodes.splice(index < 0 ? nodes.length : index, 0, mark);
+  return nodes;
 }
 
 // '8:00 PM–9:00 PM' → '8p–9p', '11:59 PM' → '11:59p' (month cells are narrow)
@@ -254,9 +293,8 @@ function goToDay(d) { view.mode = 'day'; view.cursor = new Date(d); pref('mode',
 
 // ----- Day view: all-day row + hour timeline (blocks for things with a duration, pins for deadlines) -----
 const HOUR_PX = 48;
-// Optional features can add to the day (e.g. Google events): each returns { allDay: [...nodes], blocks: [{id,start,end,node}] }.
-const dayExtras = [];
-function renderDay({ all, now }) {
+function renderDay(m) {
+  const { calAll: all, now } = m;
   const d = new Date(view.cursor); d.setHours(0, 0, 0, 0);
   const k = dayKey(d);
   $('#calTitle').textContent = d.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
@@ -272,7 +310,7 @@ function renderDay({ all, now }) {
     }
     if (i.start && i.opens && dayKey(i.start) === k) pins.push({ at: new Date(i.start), node: chipFor({ i, kind: 'opens' }) });
   }
-  for (const extra of dayExtras) { const x = extra(d); allDay.push(...(x.allDay || [])); blocks.push(...(x.blocks || [])); }
+  for (const extra of hooks.day) { const x = extra(m, d) || {}; allDay.push(...(x.allDay || [])); blocks.push(...(x.blocks || [])); }
 
   // Hours shown: 7 AM–11 PM, stretched to fit anything earlier/later.
   const hourOf = t => { t = new Date(t); return t.getHours() + t.getMinutes() / 60; };
@@ -290,7 +328,7 @@ function renderDay({ all, now }) {
       if (e.target !== e.currentTarget && !e.target.classList.contains('hour-line')) return;
       const r = e.currentTarget.getBoundingClientRect();
       const hr = Math.min(23, h0 + Math.floor((e.clientY - r.top) / HOUR_PX));
-      openTaskForm(null, k, `${String(hr).padStart(2, '0')}:00`);
+      addSomething(k, `${String(hr).padStart(2, '0')}:00`);
     } });
   for (let hr = h0; hr < h1; hr++) grid.append(h('div', { class: 'hour-line', style: { top: `${(hr - h0) * HOUR_PX}px` } }));
   // pins: several due at the same minute share one row
@@ -353,9 +391,18 @@ function chipFor({ i, kind }) {
   label, view.mode !== 'month' && time ? ` · ${time}` : '', kind === 'due' && noteOf(i) ? h('span', { class: 'chip-note', 'aria-label': 'has a note' }, ' 📝') : null);
 }
 
-function renderLegend({ visible }) {
-  $('#legend').replaceChildren(...data.courses.filter(c => visible.has(c.id))
-    .map(c => h('span', { class: 'tag', style: { '--c': data.colors[c.id] }, title: c.name }, c.short)));
+// Legend badges toggle a course (or Google calendar) on the calendar view only; the to-do list is unaffected.
+const calHidden = id => id != null && !!data.state.calendarHidden?.[id];
+const toggleCal = id => patchState({ calendarHidden: { [id]: !calHidden(id) } });
+function legendButton(id, name, attrs, label) {
+  const off = calHidden(id);
+  return h('button', { type: 'button', ...attrs, class: `${attrs.class} legend-btn${off ? ' off' : ''}`, 'aria-pressed': !off,
+    title: `${name}: click to ${off ? 'show on' : 'hide from'} the calendar`, onclick: () => toggleCal(id) }, label);
+}
+function renderLegend(model) {
+  $('#legend').replaceChildren(...data.courses.filter(c => model.visible.has(c.id))
+    .map(c => legendButton(c.id, c.name, { class: 'tag', style: { '--c': data.colors[c.id] } }, c.short)),
+    ...hooks.legend.flatMap(f => f(model) || []));
 }
 
 // ----- dialogs -----
@@ -377,6 +424,7 @@ function openItem(i) {
     i.instructions ? [h('strong', {}, 'Instructions'), h('div', { class: 'instr' }, linkNodes(i.instructions))] : null,
     noteEditor(i),
     studyButton(i),
+    ...hooks.itemDetails.flatMap(f => f(i, lastModel) || []),
     h('p', { class: 'links' }, ...brightspaceLinks(i),
       i.kind === 'exam' ? h('a', { href: announcementUrl(brightspaceOrigin(data.items), i.courseId, i.sourceAnnouncement), target: '_blank', rel: 'noopener noreferrer' }, 'Open the announcement in Brightspace ↗') : null, ' ',
       h('label', { style: { display: 'inline-flex', gap: '6px', 'align-items': 'center' } },
@@ -474,18 +522,6 @@ function openAnnouncement(a) {
   if (!data.state.seenAnnouncements.includes(a.id)) patchState({ seenAnnouncements: [a.id] }).catch(() => {});
 }
 
-function openDay(d, entries) {
-  if (!entries.length) return openTaskForm(null, dayKey(d)); // empty day → straight to "add task" on that date
-  const rows = entries.map(({ i, kind }) => kind === 'opens'
-    ? h('div', { class: 'item' }, h('span', {}, '◌'), h('div', { class: 'main', onclick: () => openItem(i) }, h('div', { class: 'title' }, h('span', { class: 'tag', style: { '--c': colorOf(i) } }, tagText(i)), ` Opens ${fmtTime(i.start)}: ${i.title}`)))
-    : itemRow(i, { showDay: true }));
-  // replaceChildren takes nodes as separate arguments; an array would be stringified.
-  $('#dayBody').replaceChildren(h('h2', {}, d.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })),
-    ...(rows.length ? rows : [h('p', { class: 'muted' }, 'Nothing scheduled.')]));
-  $('#dayAdd').onclick = () => { $('#dlgDay').close(); openTaskForm(null, dayKey(d)); };
-  $('#dlgDay').showModal();
-}
-
 function openTaskForm(task, date, time) {
   const f = $('#taskForm');
   f.reset();
@@ -524,11 +560,26 @@ $('#taskDelete').onclick = async () => {
 };
 
 // ----- ⚙ Settings -----
-let settingsSection = 'features';
+let settingsSection = 'courses';
+// Feature sections (e.g. Google Calendar) appear as extra tabs while their feature is on.
+function renderSettingsNav() {
+  const nav = $('#settingsNav');
+  for (const b of nav.querySelectorAll('[data-feature]')) b.remove();
+  for (const s of hooks.settings) if (s.visible()) {
+    nav.append(h('button', { type: 'button', role: 'tab', 'data-sec': s.id, 'data-feature': '1' }, s.title)); // after Features
+  }
+  if ($('#dlgSettings').open) for (const b of nav.querySelectorAll('[data-sec]')) b.setAttribute('aria-selected', b.dataset.sec === settingsSection);
+}
 function showSettingsSection(sec) {
+  let feature = hooks.settings.find(s => s.id === sec);
+  if (feature && !feature.visible()) { sec = 'features'; feature = null; }
   settingsSection = sec;
+  renderSettingsNav();
+  const box = $('#featureSection');
+  box.hidden = !feature;
+  if (feature) feature.render(box);
   for (const b of document.querySelectorAll('#settingsNav [data-sec]')) b.setAttribute('aria-selected', b.dataset.sec === sec);
-  for (const s of document.querySelectorAll('.settings-sec')) s.hidden = s.dataset.sec !== sec;
+  for (const s of document.querySelectorAll('.settings-sec[data-sec]')) s.hidden = s.dataset.sec !== sec;
   if (sec === 'courses') openCourses();
   if (sec === 'notifications') { $('#notifyResult').textContent = ''; renderNotifyButton(); }
   if (sec === 'features') renderFeatures();
@@ -631,7 +682,9 @@ $('#today').onclick = () => { view.cursor = new Date(); render(); };
 const step = dir => view.mode === 'month' ? new Date(view.cursor.getFullYear(), view.cursor.getMonth() + dir, 1) : addDays(view.cursor, dir * (view.mode === 'day' ? 1 : 7));
 $('#prev').onclick = () => { view.cursor = step(-1); render(); };
 $('#next').onclick = () => { view.cursor = step(1); render(); };
-$('#btnAdd').onclick = () => openTaskForm(null);
+$('#btnAdd').onclick = () => addSomething();
+// "Add": a task, unless a feature offers more choices (e.g. a Google event).
+function addSomething(date, time) { if (!hooks.add.some(f => f({ date, time }))) openTaskForm(null, date, time); }
 $('#btnSettings').onclick = () => openSettings();
 $('#btnMarkRead').onclick = () => patchState({ seenAnnouncements: data.announcements.map(a => a.id) });
 $('#btnRefresh').onclick = () => {
@@ -672,4 +725,10 @@ async function loop() {
   if (firstLoad && data) { firstLoad = false; followLink(); }
   setTimeout(loop, data?.refreshing ? 5000 : 60000);
 }
+// Small API for optional feature modules (they load after this file and register into `hooks`).
+window.dash = {
+  hooks, h, api, render, patchState, calHidden, legendButton, reload: () => load(), openItem, openTaskForm, openSettings, showSettingsSection, linkNodes,
+  fmtTime, fmtDay, fmtFull, compactTime, tagText, colorOf, noteOf, dayKey, addDays, view, pref,
+  get data() { return data; }, get model() { return lastModel; }, status: t => { $('#status').textContent = t; },
+};
 loop();
