@@ -26,6 +26,8 @@ a { color: #fff; text-decoration: underline; }
 .top { display: flex; align-items: center; gap: 16px; padding: 12px 20px; background: var(--panel); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 .top h1 { font-size: 18px; display: flex; align-items: center; gap: 10px; }
 .brand { height: 26px; width: auto; display: block; }
+.brand-link { display: block; border-radius: 4px; }
+.brand-link:hover .brand { opacity: .85; }
 .divider { width: 1px; height: 24px; background: #cfb991; } /* Purdue Boilermaker Gold */
 .demo { font-size: 11px; font-weight: 600; text-transform: uppercase; background: var(--amber-bg); color: var(--amber); padding: 2px 6px; border-radius: 4px; vertical-align: middle; }
 .status { color: var(--muted); flex: 1; min-width: 200px; }

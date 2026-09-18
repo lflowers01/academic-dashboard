@@ -43,6 +43,8 @@ async function run(browserName) {
       assert.equal(await page.$eval('img.brand', i => i.complete && i.naturalWidth > 0), true);
       assert.equal(await page.$eval('.credits img', i => i.complete && i.naturalWidth > 0), true);
       assert.equal(await page.getAttribute('.credits a', 'href'), 'https://lucasflowers.net');
+      assert.equal(await page.getAttribute('a.brand-link', 'href'), 'https://experience.elluciancloud.com/mypurdue');
+      assert.equal(await page.getAttribute('a.brand-link', 'target'), '_blank');
       assert.equal(await page.$eval('link[rel=icon]', l => l.getAttribute('href')), '/icon.svg');
     });
 

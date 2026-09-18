@@ -38,7 +38,7 @@ It answers at a glance:
 - Colors: a 13-hue palette assigned **only to shown courses**, this term's first, so they don't repeat. Black text on every color, ≥ 7:1 contrast.
 
 ## 5. Layout
-- Header: Purdue logo · "Academic Dashboard" · last/next refresh · Refresh · 🔔 Notifications · Courses. Banner row only when something is wrong.
+- Header: Purdue logo (links to myPurdue in a new tab) · "Academic Dashboard" · last/next refresh · Refresh · 🔔 Notifications · Courses. Banner row only when something is wrong.
 - Tabs: **Calendar & To-do** and **Announcements** (unread badge).
 - To-do column: Overdue · Today (including items done today) · Tomorrow · This week · Later ▸ · No due date ▸, plus "+ Add task". Rows have a checkbox, course tag, title and badges (urgency, EXAM, OPENS, timed, points, NEW).
 - Calendar: month (Monday start, 3 chips per day then "+N more") or week (everything). Clicking an empty day adds a task on it; clicking an item opens its details (dates, points, time limit, instructions as plain text, link to Brightspace, done toggle). **Past-due assignments** link to the course's assignment list (Brightspace answers 403 on a closed submission page), plus a secondary "Submission page (may be closed)" link. Announced exams and announcements link to the announcement page (`/d2l/le/news/{course}/{id}/view`).
