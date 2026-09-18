@@ -62,6 +62,15 @@ Tell them briefly:
 - Exams found in Brightspace (quizzes named "Exam 2", "Midterm"…, or exam dates in announcements) show in gold on the calendar.
 - Red "sign-in needed" banner → click **Sign in**, approve on the phone, then **↻ Refresh**.
 
+## When the user asks to "update" the dashboard
+Latest release: https://github.com/lflowers01/academic-dashboard/releases/latest (asset `academic-dashboard.zip`). Their data lives in `data\` and must be kept.
+1. Compare `"version"` in this folder's `package.json` with the latest release's tag. If they match, say it's up to date and stop.
+2. Run `stop.cmd`.
+3. Download `https://github.com/lflowers01/academic-dashboard/releases/latest/download/academic-dashboard.zip` to a temp folder and extract it (it contains one `academic-dashboard\` folder).
+4. Copy everything from the extracted `academic-dashboard\` over this folder. **Never delete or overwrite `data\`** (the release has no `data\` folder, so a plain copy keeps it). Don't delete `node_modules\`.
+5. `npm install`, then `npm test` (every test must pass).
+6. Start it again: `start.cmd` (outside any sandbox, same as setup step 4). Check `http://localhost:4321/api/data` responds, and tell them what's new (the release notes on GitHub).
+
 ## Everyday questions users may ask you
 - "Is it running?" → `curl -s http://localhost:4321/api/data`. Otherwise run `start.cmd` (outside the sandbox).
 - "Stop it" / "uninstall" → `stop.cmd` / `uninstall-autostart.cmd` (then the folder can be deleted).
