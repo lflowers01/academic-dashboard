@@ -406,6 +406,11 @@ export const boilerexamsUrl = key => `https://boilerexams.com/courses/${encodeUR
 
 export const sundayOf = d => { d = startOfDay(d); return addDays(d, -d.getDay()); };
 
+// ---- optional features (⚙ Settings → Features) ----
+// Each entry is off unless the user turns it on (state.features[id] === true). Add future features here.
+export const FEATURES = [];
+export const featureOn = (state, id) => state?.features?.[id] === true && FEATURES.some(f => f.id === id);
+
 // Split plain text into text/link segments. Rendering uses textContent, so no HTML is ever interpreted.
 export function linkify(text) {
   const out = [], re = /https?:\/\/[^\s<>"')\]]*[^\s<>"')\].,;:!?]/g; // don't swallow trailing punctuation

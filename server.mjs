@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { buildItems, refreshDue, nextSlot, shortName, currentTerm, viewModel, digestItems, digestMessage, digestLink, boilerexamsKey } from './logic.mjs';
+import { buildItems, refreshDue, nextSlot, shortName, currentTerm, viewModel, digestItems, digestMessage, digestLink, boilerexamsKey, FEATURES } from './logic.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURE = process.argv.includes('--fixture');
@@ -72,7 +72,8 @@ let cache = FIXTURE ? loadFixture() : readJson('cache.json', null);
 let tasks = readJson('tasks.json', []);
 if (!Array.isArray(tasks)) tasks = [];
 // notes: your own notes on Brightspace items, by item id. Never pruned, so a note survives an item briefly vanishing.
-const STATE_DEFAULTS = { done: {}, seenAnnouncements: [], hiddenCourses: {}, notes: {}, notifications: true, lastDigest: null };
+// features: optional features switched on in ⚙ Settings (all off by default).
+const STATE_DEFAULTS = { done: {}, seenAnnouncements: [], hiddenCourses: {}, notes: {}, features: {}, notifications: true, lastDigest: null };
 let state = { ...STATE_DEFAULTS, ...readJson('state.json', {}) };
 delete state.notified; // from the earlier per-item notification design
 const meta = { lastAttemptAt: null, lastError: null, paused: false, retryIndex: 0, nextRetryAt: null, refreshing: null, notifyBlocked: null };
@@ -314,6 +315,7 @@ const server = http.createServer(async (req, res) => {
       }
       if (Array.isArray(b.seenAnnouncements)) state.seenAnnouncements = [...new Set([...state.seenAnnouncements, ...b.seenAnnouncements])];
       if (typeof b.notifications === 'boolean') state.notifications = b.notifications;
+      for (const [k, v] of Object.entries(b.features || {})) if (FEATURES.some(f => f.id === k) && typeof v === 'boolean') state.features[k] = v; // unknown ids ignored
       writeJson('state.json', state);
       return send(res, 200, state);
     }

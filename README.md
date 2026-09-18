@@ -69,8 +69,9 @@ When it's done, bookmark **http://localhost:4321**.
 | Add your own task | **+ Add task**, press **N**, or click an empty calendar day. Add an **End date** for something that spans days (e.g. Sat–Sun). Tick **This is an exam** for exams. |
 | Edit or delete your task | Click it |
 | Jump to today | **Today**, or press **T** |
-| Hide or show a course | **Courses** |
-| Notifications on/off, or a test | **🔔 Notifications** |
+| Hide or show a course | **⚙ Settings → Courses** |
+| Notifications on/off, or a test | **⚙ Settings → Notifications** |
+| Turn optional features on or off | **⚙ Settings → Features** |
 | Update right now | **↻ Refresh** (about 2 minutes) |
 
 **Colors:** each course has its own color. Urgency always appears as a labeled badge: red **OVERDUE**, orange **TODAY**, yellow **TOMORROW**. **Gold = exam.** A dashed outline on the calendar means "**opens** at this time".
@@ -79,7 +80,7 @@ When it's done, bookmark **http://localhost:4321**.
 
 **Exams** are picked up from quizzes named like "Exam 2" or "Midterm" (not practice quizzes), and from announcements that schedule one (e.g. *"Exam 1 is Thurs. Sept. 24, 8:00-9:00 PM"*). Mentions of an exam inside a deadline ("sign up for a seat by…", "Exam Agreement due…") are ignored. If an exam is missing, add it yourself and tick **This is an exam**.
 
-**Which courses show up:** your registered classes for the current semester always do. Other Brightspace sites (orientation, clubs, trainings, newsletters) show only while they have something due in the next 30 days. Override with **Courses**.
+**Which courses show up:** your registered classes for the current semester always do. Other Brightspace sites (orientation, clubs, trainings, newsletters) show only while they have something due in the next 30 days. Override in **⚙ Settings → Courses**.
 
 **Notifications** come from Windows itself, so they work even with the browser closed. You get one when your PC starts and after each 3-hour refresh, listing unfinished things due **today** or **before 10 AM tomorrow**; if nothing's due, you get nothing. **Clicking it opens the dashboard right at those items** (a single item opens its details).
 
@@ -93,7 +94,7 @@ When it's done, bookmark **http://localhost:4321**.
 
 **Yellow banner: "Couldn't reach Brightspace"**: usually no internet. It keeps showing your last data and retries in 5, 15, then 30 minutes.
 
-**No notifications**: open **🔔 Notifications**. If Windows is blocking them, it says so and has a button that opens the right Windows setting: turn **Notifications** on (and **Windows PowerShell**, which the dashboard uses to show them). Then click **Send a test notification**. With Do Not Disturb on, they go quietly to the notification center.
+**No notifications**: open **⚙ Settings → Notifications**. If Windows is blocking them, it says so and has a button that opens the right Windows setting: turn **Notifications** on (and **Windows PowerShell**, which the dashboard uses to show them). Then click **Send a test notification**. With Do Not Disturb on, they go quietly to the notification center.
 
 **Page won't load**: double-click `start.cmd`. If it still fails, look at `data\server.log`.
 

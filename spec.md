@@ -33,12 +33,12 @@ It answers at a glance:
 - Dates are UTC from Brightspace and shown in the PC's local time zone.
 
 ## 4. Courses
-- Shown by default: **this term's registrar courses** (code `wl.{term}.{SUBJ}.{number}.{section}`, newest term present) plus any other site with a not-done item due in the next 30 days. Everything else is hidden. The **Courses** dialog overrides either way ("Reset to automatic" clears the overrides).
+- Shown by default: **this term's registrar courses** (code `wl.{term}.{SUBJ}.{number}.{section}`, newest term present) plus any other site with a not-done item due in the next 30 days. Everything else is hidden. **⚙ Settings → Courses** overrides either way ("Reset to automatic" clears the overrides).
 - Short names come from the code (`CHM 11510` → `CHM 115`, "Lab" kept), a short parenthetical (`… (SOLIDWORKS)`), or the name.
 - Colors: a 13-hue palette assigned **only to shown courses**, this term's first, so they don't repeat. Black text on every color, ≥ 7:1 contrast.
 
 ## 5. Layout
-- Header: Purdue logo (links to myPurdue in a new tab) · "Academic Dashboard" · last/next refresh · Refresh · 🔔 Notifications · Courses. Banner row only when something is wrong.
+- Header: Purdue logo (links to myPurdue in a new tab) · "Academic Dashboard" · last/next refresh · Refresh · ⚙ Settings (Features · Notifications · Courses, with an orange dot when something needs attention). Banner row only when something is wrong.
 - Tabs: **Calendar & To-do** and **Announcements** (unread badge).
 - To-do column: Overdue · Today (including items done today) · Tomorrow · This week · Later ▸ · No due date ▸, plus "+ Add task". Rows have a checkbox, course tag, title and badges (urgency, EXAM, OPENS, timed, points, NEW).
 - Calendar: month (**Sunday** start, 3 boxes per day then "+N more"; **multi-day tasks are one bar across their days**, packed into lanes above the day's boxes, with the title repeated on each week row they continue onto) or week (everything). Clicking an empty day adds a task on it; clicking an item opens its details (dates, points, time limit, instructions as plain text, link to Brightspace, done toggle). **Past-due assignments** link to the course's assignment list (Brightspace answers 403 on a closed submission page), plus a secondary "Submission page (may be closed)" link. Announced exams and announcements link to the announcement page (`/d2l/le/news/{course}/{id}/view`).
@@ -60,8 +60,8 @@ Title (required), date (required), **end date (optional, for a range like Sat–
 - **When:** after the start-up refresh (i.e. when Windows starts) and after every scheduled 3-hour refresh; also from cached data while signed out.
 - **What:** one digest of unfinished items due **today** (including ones already past today) or **before 10:00 AM tomorrow** (`EARLY_MORNING_HOUR`). Nothing due → nothing sent. The same digest isn't repeated within 90 minutes.
 - Clicking the notification opens the dashboard: a digest with **one** item opens that item's details (`#item=<id>`); **several** items are highlighted in the to-do list (`#due=<id>,…`). Notifications stay on screen ~25 s (`duration="long"`), then sit in the notification center.
-- If Windows notifications are switched off (the master toggle, or the per-app toggle for Windows PowerShell), Windows drops them silently. The server reads both switches (read-only) and the 🔔 dialog says so, with an "Open Windows notification settings" button.
-- On/off and "Send a test notification" live in the 🔔 dialog.
+- If Windows notifications are switched off (the master toggle, or the per-app toggle for Windows PowerShell), Windows drops them silently. The server reads both switches (read-only) and ⚙ Settings → Notifications says so, with an "Open Windows notification settings" button.
+- On/off and "Send a test notification" live in ⚙ Settings → Notifications.
 - Safety: text is XML-escaped (control characters dropped) and passed to PowerShell in environment variables, never in the command line.
 
 ## 8. Announcements

@@ -1,4 +1,4 @@
-import { isDone, isVisible, dayKey, addDays, linkify, courseColors, viewModel, parseLink, brightspaceOrigin, announcementUrl, assignmentListUrl, itemDays, parseMarkdown, layoutSpans, sundayOf, boilerexamsUrl } from '/logic.mjs';
+import { isDone, isVisible, dayKey, addDays, linkify, courseColors, viewModel, parseLink, brightspaceOrigin, announcementUrl, assignmentListUrl, itemDays, parseMarkdown, layoutSpans, sundayOf, boilerexamsUrl, FEATURES, featureOn } from '/logic.mjs';
 
 const $ = s => document.querySelector(s);
 let data = null;
@@ -451,6 +451,27 @@ $('#taskDelete').onclick = async () => {
   load();
 };
 
+// ----- ⚙ Settings -----
+let settingsSection = 'features';
+function showSettingsSection(sec) {
+  settingsSection = sec;
+  for (const b of document.querySelectorAll('#settingsNav [data-sec]')) b.setAttribute('aria-selected', b.dataset.sec === sec);
+  for (const s of document.querySelectorAll('.settings-sec')) s.hidden = s.dataset.sec !== sec;
+  if (sec === 'courses') openCourses();
+  if (sec === 'notifications') { $('#notifyResult').textContent = ''; renderNotifyButton(); }
+  if (sec === 'features') renderFeatures();
+}
+function openSettings(sec = settingsSection) {
+  showSettingsSection(sec);
+  if (!$('#dlgSettings').open) $('#dlgSettings').showModal();
+}
+function renderFeatures() {
+  $('#featureList').replaceChildren(...(FEATURES.length ? FEATURES.map(f => h('div', { class: 'feature-row' },
+    h('label', { class: 'switch-row' },
+      h('input', { type: 'checkbox', role: 'switch', checked: featureOn(data.state, f.id), onchange: e => patchState({ features: { [f.id]: e.target.checked } }).then(renderFeatures).catch(() => {}) }),
+      h('span', {}, h('strong', {}, f.name), h('br'), h('small', { class: 'muted' }, f.description))))) : [h('p', { class: 'muted' }, 'No optional features yet.')]));
+}
+
 function openCourses() {
   const now = new Date();
   const list = [...data.courses].sort((a, b) => a.short.localeCompare(b.short));
@@ -462,7 +483,6 @@ function openCourses() {
         h('span', { class: 'tag', style: { '--c': data.colors[c.id] } }, c.short),
         h('span', {}, c.name, overridden ? h('small', {}, ' · manual') : null)));
   }));
-  if (!$('#dlgCourses').open) $('#dlgCourses').showModal();
 }
 const openCoursesRefresh = () => openCourses();
 $('#courseReset').onclick = () => patchState({ hiddenCourses: Object.fromEntries(Object.keys(data.state.hiddenCourses).map(k => [k, null])) }).then(openCourses);
@@ -513,7 +533,7 @@ const BLOCKED = {
 function renderNotifyButton() {
   const on = data?.state?.notifications !== false;
   const blocked = data?.notifyBlocked;
-  $('#btnNotify').querySelector('span').textContent = !on ? 'Notifications off' : blocked ? 'Notifications blocked' : 'Notifications on';
+  $('#settingsDot').hidden = !(on && blocked); // ⚙ gets a dot while notifications are on but Windows blocks them
   $('#notifyToggle').checked = on;
   $('#notifyBlocked').hidden = !blocked;
   $('#notifyBlockedText').textContent = BLOCKED[blocked] || '';
@@ -538,14 +558,14 @@ $('#today').onclick = () => { view.cursor = new Date(); render(); };
 $('#prev').onclick = () => { view.cursor = view.mode === 'month' ? new Date(view.cursor.getFullYear(), view.cursor.getMonth() - 1, 1) : addDays(view.cursor, -7); render(); };
 $('#next').onclick = () => { view.cursor = view.mode === 'month' ? new Date(view.cursor.getFullYear(), view.cursor.getMonth() + 1, 1) : addDays(view.cursor, 7); render(); };
 $('#btnAdd').onclick = () => openTaskForm(null);
-$('#btnCourses').onclick = openCourses;
+$('#btnSettings').onclick = () => openSettings();
 $('#btnMarkRead').onclick = () => patchState({ seenAnnouncements: data.announcements.map(a => a.id) });
 $('#btnRefresh').onclick = () => {
   data.refreshing = true; renderStatus();
   api('/api/refresh', {}).finally(load);
   setTimeout(load, 500);
 };
-$('#btnNotify').onclick = () => { $('#notifyResult').textContent = ''; renderNotifyButton(); $('#dlgNotify').showModal(); };
+$('#settingsNav').onclick = e => { const b = e.target.closest('[data-sec]'); if (b) showSettingsSection(b.dataset.sec); };
 $('#notifyToggle').onchange = e => patchState({ notifications: e.target.checked }).catch(() => {});
 $('#notifyTest').onclick = sendTestNotification;
 $('#notifySettings').onclick = () => api('/api/notification-settings', {}).catch(() => {});

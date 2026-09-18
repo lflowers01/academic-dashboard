@@ -57,7 +57,7 @@ Several steps need the **internet**, or must run **outside a sandbox**, or both:
 ### 5. Wrap up
 Tell them briefly:
 - Bookmark **http://localhost:4321**.
-- 🔔 **Notifications**: when Windows starts and after every 3-hour refresh they get one Windows notification listing what's due today and early tomorrow (before 10 AM). "Send a test notification" is in that menu. If nothing appears: Windows Settings → System → Notifications → allow "Windows PowerShell".
+- **⚙ Settings → Notifications**: when Windows starts and after every 3-hour refresh they get one Windows notification listing what's due today and early tomorrow (before 10 AM). "Send a test notification" is there too. Optional features live in ⚙ Settings → Features. If nothing appears: Windows Settings → System → Notifications → allow "Windows PowerShell".
 - **+ Add task** (or press N) for things Brightspace doesn't track, like homework on WebAssign/Achieve. Tick "This is an exam" for exams.
 - Exams found in Brightspace (quizzes named "Exam 2", "Midterm"…, or exam dates in announcements) show in gold on the calendar.
 - Red "sign-in needed" banner → click **Sign in**, approve on the phone, then **↻ Refresh**.

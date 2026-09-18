@@ -208,7 +208,7 @@ async function run(browserName) {
     });
 
     await step('courses dialog hides and restores a course', async () => {
-      await page.click('#btnCourses');
+      await page.click('#btnSettings'); await page.click('#settingsNav [data-sec=courses]');
       const before = await page.locator('#legend .tag').count();
       await page.locator('#courseList input[type=checkbox]:checked').first().uncheck();
       await page.waitForTimeout(400);
@@ -277,6 +277,19 @@ async function run(browserName) {
       await page.keyboard.press('Escape');
     });
 
+    await step('settings window: sections switch; features list renders', async () => {
+      await page.click('#btnSettings');
+      assert.equal(await page.$eval('#dlgSettings', d => d.open), true);
+      for (const sec of ['features', 'notifications', 'courses']) {
+        await page.click(`#settingsNav [data-sec=${sec}]`);
+        assert.equal(await page.isVisible(`.settings-sec[data-sec=${sec}]`), true);
+      }
+      await page.click('#settingsNav [data-sec=features]');
+      assert.ok((await page.innerText('#featureList')).length > 0);
+      await page.keyboard.press('Escape');
+      assert.equal(await page.isVisible('#btnNotify'), false); // old buttons are gone
+    });
+
     await step('announcements tab, unread badge, mark read', async () => {
       assert.equal(await page.isVisible('#annBadge'), true);
       await page.click('#tabAnn');
@@ -289,7 +302,7 @@ async function run(browserName) {
     });
 
     await step('notifications dialog: toggle + test', async () => {
-      await page.click('#btnNotify');
+      await page.click('#btnSettings'); await page.click('#settingsNav [data-sec=notifications]');
       await page.click('#notifyTest');
       await page.waitForFunction(() => document.querySelector('#notifyResult').textContent.startsWith('Sent'));
       assert.match(fs.readFileSync(path.join(srv.dir, 'toasts.log'), 'utf8'), /Notifications are working/);
@@ -347,8 +360,8 @@ for (const b of (process.env.BROWSERS || 'firefox,chromium').split(',')) await r
   const page = await browser.newPage();
   try {
     await page.goto(srv.base); await page.waitForSelector('#todoList .item');
-    assert.match(await page.innerText('#btnNotify'), /blocked/);
-    await page.click('#btnNotify');
+    assert.equal(await page.isVisible('#settingsDot'), true); // ⚙ shows the attention dot
+    await page.click('#btnSettings'); await page.click('#settingsNav [data-sec=notifications]');
     assert.equal(await page.isVisible('#notifyBlocked'), true);
     assert.match(await page.innerText('#notifyBlocked'), /switched off for your whole PC/);
     await page.click('#notifyTest');

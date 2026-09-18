@@ -13,8 +13,7 @@
   <div class="status" id="status" aria-live="polite"></div>
   <div class="actions">
     <button id="btnRefresh" type="button">↻ Refresh</button>
-    <button id="btnNotify" type="button" title="Windows notifications">🔔 <span>Notifications</span></button>
-    <button id="btnCourses" type="button">Courses</button>
+    <button id="btnSettings" type="button" title="Settings: features, notifications, courses">⚙ Settings<span id="settingsDot" class="attn" hidden title="Something here needs your attention"></span></button>
   </div>
 </header>
 
@@ -92,8 +91,21 @@
 
 <dialog id="dlgItem"><div id="itemBody"></div><form method="dialog" class="dlg-actions"><span class="spacer"></span><button>Close</button></form></dialog>
 <dialog id="dlgDay"><div id="dayBody"></div><form method="dialog" class="dlg-actions"><button type="button" id="dayAdd">+ Add task this day</button><span class="spacer"></span><button>Close</button></form></dialog>
-<dialog id="dlgNotify">
-  <h2>Windows notifications</h2>
+
+
+<dialog id="dlgSettings" class="settings">
+  <div class="settings-head"><h2>Settings</h2><form method="dialog"><button class="primary">Done</button></form></div>
+  <nav class="settings-nav" role="tablist" id="settingsNav">
+    <button type="button" role="tab" data-sec="features">Features</button>
+    <button type="button" role="tab" data-sec="notifications">Notifications</button>
+    <button type="button" role="tab" data-sec="courses">Courses</button>
+  </nav>
+  <section class="settings-sec" data-sec="features">
+    <p class="muted">Optional extras. Everything here is off unless you turn it on, and turning it off hides it again.</p>
+    <div id="featureList"></div>
+  </section>
+  <section class="settings-sec" data-sec="notifications">
+  
   <p class="muted">When Windows starts and after every 3-hour refresh, you get one notification listing what's due <strong>today</strong> and <strong>early tomorrow morning</strong> (before 10 AM). Nothing due → no notification. They work even when this page is closed, as long as the dashboard is running.</p>
   <div id="notifyBlocked" class="warn" hidden>
     <strong>Notifications are blocked.</strong> <span id="notifyBlockedText"></span>
@@ -104,14 +116,12 @@
   <p><button type="button" id="notifyTest">Send a test notification</button></p>
   <p id="notifyResult" class="muted" aria-live="polite"></p>
   <p class="muted"><small>Not seeing them? Windows Settings → System → Notifications: make sure notifications are on and “Windows PowerShell” is allowed (the dashboard uses it to show them). Do Not Disturb hides pop-ups but they still land in the notification center.</small></p>
-  <form method="dialog" class="dlg-actions"><span class="spacer"></span><button class="primary">Done</button></form>
-</dialog>
-
-<dialog id="dlgCourses">
-  <h2>Courses</h2>
+  </section>
+  <section class="settings-sec" data-sec="courses">
+  
   <p class="muted">Registrar courses for this term are shown automatically. Other Brightspace sites (orientation, clubs, trainings) appear only while they have deadlines in the next 30 days. Use these switches to override.</p>
   <div id="courseList"></div>
-  <form method="dialog" class="dlg-actions"><button type="button" id="courseReset">Reset to automatic</button><span class="spacer"></span><button class="primary">Done</button></form>
+  <p><button type="button" id="courseReset">Reset to automatic</button></p></section>
 </dialog>
 
 <script type="module" src="/app.js"></script>
