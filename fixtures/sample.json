@@ -1,0 +1,545 @@
+{
+ "anchor": "2026-09-18T16:00:00.000Z",
+ "courses": [
+  {
+   "id": 101,
+   "name": "Fall 2026 MA 16100 - Merge",
+   "code": "wl.202710.MA.16100.001",
+   "role": "Learner",
+   "isActive": true,
+   "canAccess": true
+  },
+  {
+   "id": 102,
+   "name": "Fall 2026 CHM 11500 LEC",
+   "code": "wl.202710.CHM.11500.002",
+   "role": "Learner",
+   "isActive": true,
+   "canAccess": true
+  },
+  {
+   "id": 103,
+   "name": "Fall 2026 CHM 11500 Lab",
+   "code": "wl.202710.CHM.11500.120",
+   "role": "Learner",
+   "isActive": true,
+   "canAccess": true
+  },
+  {
+   "id": 104,
+   "name": "Fall 2026 ENGL 10600",
+   "code": "wl.202710.ENGL.10600.041",
+   "role": "Learner",
+   "isActive": true,
+   "canAccess": true
+  },
+  {
+   "id": 105,
+   "name": "Fall 2026 CS 15900 - Merge",
+   "code": "wl.202710.CS.15900.001",
+   "role": "Learner",
+   "isActive": true,
+   "canAccess": true
+  },
+  {
+   "id": 106,
+   "name": "Fall 2026 ENGR 13100",
+   "code": "wl.202710.ENGR.13100.010",
+   "role": "Learner",
+   "isActive": true,
+   "canAccess": true
+  },
+  {
+   "id": 107,
+   "name": "Spring 2026 MA 15900",
+   "code": "wl.202620.MA.15900.001",
+   "role": "Learner",
+   "isActive": true,
+   "canAccess": true
+  },
+  {
+   "id": 201,
+   "name": "2026 Orientation Programs",
+   "code": "wl.nc.2026orientation",
+   "role": "Learner",
+   "isActive": true,
+   "canAccess": true
+  },
+  {
+   "id": 202,
+   "name": "Campus News",
+   "code": "campus_news",
+   "role": "Learner",
+   "isActive": true,
+   "canAccess": true
+  },
+  {
+   "id": 203,
+   "name": "Wellness Modules",
+   "code": "wl_wellness",
+   "role": "Learner",
+   "isActive": true,
+   "canAccess": true
+  },
+  {
+   "id": 204,
+   "name": "Robotics Club CAD Training",
+   "code": "robotics_cad_training",
+   "role": "Learner",
+   "isActive": true,
+   "canAccess": true
+  }
+ ],
+ "assignments": {
+  "101": {
+   "assignments": [
+    {
+     "type": "quiz",
+     "id": 1000,
+     "name": "Quiz 3: Limits",
+     "url": "https://purdue.brightspace.com/d2l/lms/quizzing/user/quiz_summary.d2l?qi=1001",
+     "instructions": {
+      "markdown": ""
+     },
+     "dueDate": "2026-09-17T03:59:00.000Z",
+     "startDate": "2026-09-09T12:00:00.000Z",
+     "endDate": "2026-09-17T03:59:00.000Z",
+     "timeLimit": null,
+     "attemptsAllowed": 1
+    },
+    {
+     "type": "quiz",
+     "id": 1001,
+     "name": "Quiz 4: Derivatives",
+     "url": "https://purdue.brightspace.com/d2l/lms/quizzing/user/quiz_summary.d2l?qi=1002",
+     "instructions": {
+      "markdown": ""
+     },
+     "dueDate": "2026-09-24T03:59:00.000Z",
+     "startDate": "2026-09-19T12:00:00.000Z",
+     "endDate": "2026-09-24T03:59:00.000Z",
+     "timeLimit": 30,
+     "attemptsAllowed": 1
+    },
+    {
+     "type": "assignment",
+     "id": 1002,
+     "name": "Written HW 2",
+     "url": "https://purdue.brightspace.com/d2l/lms/dropbox/user/folder_submit_files.d2l?db=1003",
+     "instructions": {
+      "markdown": ""
+     },
+     "dueDate": "2026-09-19T03:59:00.000Z",
+     "points": 20,
+     "isGroup": false,
+     "rubric": [],
+     "submission": null,
+     "feedback": null
+    }
+   ]
+  },
+  "102": {
+   "assignments": [
+    {
+     "type": "assignment",
+     "id": 1003,
+     "name": "Pre-lecture reading 5",
+     "url": "https://purdue.brightspace.com/d2l/lms/dropbox/user/folder_submit_files.d2l?db=1004",
+     "instructions": {
+      "markdown": ""
+     },
+     "dueDate": "2026-09-19T12:30:00.000Z",
+     "points": 2,
+     "isGroup": false,
+     "rubric": [],
+     "submission": null,
+     "feedback": null
+    },
+    {
+     "type": "assignment",
+     "id": 1004,
+     "name": "Problem Set 3",
+     "url": "https://purdue.brightspace.com/d2l/lms/dropbox/user/folder_submit_files.d2l?db=1005",
+     "instructions": {
+      "markdown": "Show all work. Upload one PDF."
+     },
+     "dueDate": "2026-09-22T03:59:00.000Z",
+     "points": 25,
+     "isGroup": false,
+     "rubric": [],
+     "submission": null,
+     "feedback": null
+    },
+    {
+     "type": "quiz",
+     "id": 1005,
+     "name": "Exam 1 Practice Quiz",
+     "url": "https://purdue.brightspace.com/d2l/lms/quizzing/user/quiz_summary.d2l?qi=1006",
+     "instructions": {
+      "markdown": ""
+     },
+     "dueDate": "2026-09-23T00:00:00.000Z",
+     "startDate": "2026-09-20T13:00:00.000Z",
+     "endDate": "2026-09-23T00:00:00.000Z",
+     "timeLimit": 60,
+     "attemptsAllowed": 1
+    }
+   ]
+  },
+  "103": {
+   "assignments": [
+    {
+     "type": "quiz",
+     "id": 1006,
+     "name": "Lab Safety Quiz",
+     "url": "https://purdue.brightspace.com/d2l/lms/quizzing/user/quiz_summary.d2l?qi=1007",
+     "instructions": {
+      "markdown": ""
+     },
+     "dueDate": "2026-08-30T03:59:00.000Z",
+     "startDate": null,
+     "endDate": "2026-08-30T03:59:00.000Z",
+     "timeLimit": null,
+     "attemptsAllowed": 1
+    },
+    {
+     "type": "assignment",
+     "id": 1007,
+     "name": "Lab 3 Report",
+     "url": "https://purdue.brightspace.com/d2l/lms/dropbox/user/folder_submit_files.d2l?db=1008",
+     "instructions": {
+      "markdown": ""
+     },
+     "dueDate": "2026-09-20T21:00:00.000Z",
+     "points": 30,
+     "isGroup": false,
+     "rubric": [],
+     "submission": null,
+     "feedback": null
+    },
+    {
+     "type": "assignment",
+     "id": 1008,
+     "name": "Lab 2 Report",
+     "url": "https://purdue.brightspace.com/d2l/lms/dropbox/user/folder_submit_files.d2l?db=1009",
+     "instructions": {
+      "markdown": ""
+     },
+     "dueDate": "2026-09-14T03:59:00.000Z",
+     "points": 10,
+     "isGroup": false,
+     "rubric": [],
+     "submission": {
+      "files": [],
+      "comment": null
+     },
+     "feedback": null
+    }
+   ]
+  },
+  "104": {
+   "assignments": [
+    {
+     "type": "assignment",
+     "id": 1009,
+     "name": "Essay 1 Draft",
+     "url": "https://purdue.brightspace.com/d2l/lms/dropbox/user/folder_submit_files.d2l?db=1010",
+     "instructions": {
+      "markdown": ""
+     },
+     "dueDate": "2026-09-17T13:00:00.000Z",
+     "points": 15,
+     "isGroup": false,
+     "rubric": [],
+     "submission": null,
+     "feedback": null
+    },
+    {
+     "type": "assignment",
+     "id": 1010,
+     "name": "Essay 1 Final",
+     "url": "https://purdue.brightspace.com/d2l/lms/dropbox/user/folder_submit_files.d2l?db=1011",
+     "instructions": {
+      "markdown": ""
+     },
+     "dueDate": "2026-09-29T03:59:00.000Z",
+     "points": 100,
+     "isGroup": false,
+     "rubric": [],
+     "submission": null,
+     "feedback": null
+    },
+    {
+     "type": "assignment",
+     "id": 1011,
+     "name": "Reading Response 4",
+     "url": "https://purdue.brightspace.com/d2l/lms/dropbox/user/folder_submit_files.d2l?db=1012",
+     "instructions": {
+      "markdown": ""
+     },
+     "dueDate": "2026-09-18T15:00:00.000Z",
+     "points": 10,
+     "isGroup": false,
+     "rubric": [],
+     "submission": {
+      "files": [],
+      "comment": null
+     },
+     "feedback": null
+    },
+    {
+     "type": "assignment",
+     "id": 1012,
+     "name": "Participation",
+     "url": "https://purdue.brightspace.com/d2l/lms/dropbox/user/folder_submit_files.d2l?db=1013",
+     "instructions": {
+      "markdown": ""
+     },
+     "dueDate": null,
+     "points": 5,
+     "isGroup": false,
+     "rubric": [],
+     "submission": null,
+     "feedback": null
+    }
+   ]
+  },
+  "105": {
+   "assignments": [
+    {
+     "type": "assignment",
+     "id": 1013,
+     "name": "Lab 4",
+     "url": "https://purdue.brightspace.com/d2l/lms/dropbox/user/folder_submit_files.d2l?db=1014",
+     "instructions": {
+      "markdown": ""
+     },
+     "dueDate": "2026-09-20T03:59:00.000Z",
+     "points": 10,
+     "isGroup": false,
+     "rubric": [],
+     "submission": null,
+     "feedback": null
+    },
+    {
+     "type": "assignment",
+     "id": 1014,
+     "name": "Project 1",
+     "url": "https://purdue.brightspace.com/d2l/lms/dropbox/user/folder_submit_files.d2l?db=1015",
+     "instructions": {
+      "markdown": "Submit your .c file and a README."
+     },
+     "dueDate": "2026-10-01T03:59:00.000Z",
+     "points": 50,
+     "isGroup": false,
+     "rubric": [],
+     "submission": null,
+     "feedback": null
+    },
+    {
+     "type": "quiz",
+     "id": 1015,
+     "name": "Syllabus Quiz",
+     "url": "https://purdue.brightspace.com/d2l/lms/quizzing/user/quiz_summary.d2l?qi=1016",
+     "instructions": {
+      "markdown": ""
+     },
+     "dueDate": "2026-08-25T03:59:00.000Z",
+     "startDate": null,
+     "endDate": "2026-08-25T03:59:00.000Z",
+     "timeLimit": null,
+     "attemptsAllowed": 1
+    },
+    {
+     "type": "quiz",
+     "id": 1100,
+     "name": "Midterm 1",
+     "url": "https://purdue.brightspace.com/d2l/lms/quizzing/user/quiz_summary.d2l?qi=1100",
+     "instructions": {
+      "markdown": "Closed book. Bring your student ID."
+     },
+     "dueDate": "2026-09-27T01:00:00.000Z",
+     "startDate": "2026-09-26T23:00:00.000Z",
+     "endDate": "2026-09-27T01:00:00.000Z",
+     "timeLimit": 90,
+     "attemptsAllowed": 1
+    }
+   ]
+  },
+  "106": {
+   "assignments": [
+    {
+     "type": "assignment",
+     "id": 1016,
+     "name": "Team Charter",
+     "url": "https://purdue.brightspace.com/d2l/lms/dropbox/user/folder_submit_files.d2l?db=1017",
+     "instructions": {
+      "markdown": ""
+     },
+     "dueDate": "2026-09-24T21:00:00.000Z",
+     "points": 10,
+     "isGroup": false,
+     "rubric": [],
+     "submission": null,
+     "feedback": null
+    },
+    {
+     "type": "quiz",
+     "id": 1017,
+     "name": "Pre-class Quiz 5",
+     "url": "https://purdue.brightspace.com/d2l/lms/quizzing/user/quiz_summary.d2l?qi=1018",
+     "instructions": {
+      "markdown": ""
+     },
+     "dueDate": "2026-09-18T13:30:00.000Z",
+     "startDate": null,
+     "endDate": "2026-09-18T13:30:00.000Z",
+     "timeLimit": 15,
+     "attemptsAllowed": 1
+    }
+   ]
+  },
+  "107": {
+   "assignments": [
+    {
+     "type": "assignment",
+     "id": 1018,
+     "name": "Old Final Project",
+     "url": "https://purdue.brightspace.com/d2l/lms/dropbox/user/folder_submit_files.d2l?db=1019",
+     "instructions": {
+      "markdown": ""
+     },
+     "dueDate": "2026-05-22T03:59:00.000Z",
+     "points": 100,
+     "isGroup": false,
+     "rubric": [],
+     "submission": null,
+     "feedback": null
+    }
+   ]
+  },
+  "201": {
+   "assignments": []
+  },
+  "202": {
+   "assignments": []
+  },
+  "203": {
+   "assignments": [
+    {
+     "type": "quiz",
+     "id": 1019,
+     "name": "Module 1 Quiz",
+     "url": "https://purdue.brightspace.com/d2l/lms/quizzing/user/quiz_summary.d2l?qi=1020",
+     "instructions": {
+      "markdown": ""
+     },
+     "dueDate": "2026-10-02T03:59:00.000Z",
+     "startDate": null,
+     "endDate": "2026-10-02T03:59:00.000Z",
+     "timeLimit": null,
+     "attemptsAllowed": 1
+    }
+   ]
+  },
+  "204": {
+   "assignments": [
+    {
+     "type": "quiz",
+     "id": 1020,
+     "name": "Week 3 Part (Individual)",
+     "url": "https://purdue.brightspace.com/d2l/lms/quizzing/user/quiz_summary.d2l?qi=1021",
+     "instructions": {
+      "markdown": ""
+     },
+     "dueDate": "2026-09-21T03:59:00.000Z",
+     "startDate": "2026-08-19T04:01:00.000Z",
+     "endDate": "2026-09-21T03:59:00.000Z",
+     "timeLimit": null,
+     "attemptsAllowed": 1
+    },
+    {
+     "type": "quiz",
+     "id": 1021,
+     "name": "Week 4 Part (Timed)",
+     "url": "https://purdue.brightspace.com/d2l/lms/quizzing/user/quiz_summary.d2l?qi=1022",
+     "instructions": {
+      "markdown": ""
+     },
+     "dueDate": "2026-09-28T03:59:00.000Z",
+     "startDate": "2026-09-21T04:01:00.000Z",
+     "endDate": "2026-09-28T03:59:00.000Z",
+     "timeLimit": 50,
+     "attemptsAllowed": 1
+    }
+   ]
+  }
+ },
+ "grades": {
+  "101": {
+   "grades": [
+    {
+     "name": "Quiz 3: Limits",
+     "pointsNumerator": 8,
+     "pointsDenominator": 10
+    }
+   ]
+  },
+  "105": {
+   "grades": [
+    {
+     "name": "Syllabus Quiz",
+     "pointsNumerator": 10,
+     "pointsDenominator": 10
+    }
+   ]
+  }
+ },
+ "announcements": [
+  {
+   "id": 1,
+   "courseId": 101,
+   "title": "Exam 1 Information",
+   "body": "The first exam is on Wednesday, September 23 from 8:00-9:00 PM in ELLT 116.\nSee the exam page: https://www.math.purdue.edu/",
+   "date": "2026-09-18T11:12:00.000Z",
+   "startDate": "2026-09-18T11:12:00.000Z",
+   "createdBy": "Unknown"
+  },
+  {
+   "id": 2,
+   "courseId": 102,
+   "title": "Office hours moved",
+   "body": "This week office hours are Thursday 3-5 PM in WTHR 200.",
+   "date": "2026-09-17T16:00:00.000Z",
+   "startDate": "2026-09-17T16:00:00.000Z",
+   "createdBy": "Unknown"
+  },
+  {
+   "id": 3,
+   "courseId": 105,
+   "title": "Project 1 released",
+   "body": "Project 1 is now posted. <b>Start early!</b>",
+   "date": "2026-09-16T16:00:00.000Z",
+   "startDate": "2026-09-16T16:00:00.000Z",
+   "createdBy": "Unknown"
+  },
+  {
+   "id": 4,
+   "courseId": 104,
+   "title": "Welcome back",
+   "body": "Remember to bring your draft to class on Monday.",
+   "date": "2026-09-12T16:00:00.000Z",
+   "startDate": "2026-09-12T16:00:00.000Z",
+   "createdBy": "Unknown"
+  },
+  {
+   "id": 5,
+   "courseId": 203,
+   "title": "Scheduled for later",
+   "body": "This should stay hidden until its start date.",
+   "date": "2026-09-21T16:00:00.000Z",
+   "startDate": "2026-09-21T16:00:00.000Z",
+   "createdBy": "Unknown"
+  }
+ ]
+}

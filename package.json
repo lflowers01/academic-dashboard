@@ -1,0 +1,22 @@
+{
+  "name": "academic-dashboard",
+  "version": "1.0.0",
+  "description": "Local Purdue Brightspace dashboard for Windows: calendar, to-do list, exams, announcements and Windows notifications.",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "author": "Lucas Flowers (https://lucasflowers.net)",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test test.mjs test-server.mjs",
+    "demo": "node server.mjs --fixture",
+    "check": "node check.mjs",
+    "e2e": "node test-e2e.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0"
+  }
+}
