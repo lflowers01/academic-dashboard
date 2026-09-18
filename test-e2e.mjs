@@ -102,9 +102,11 @@ async function run(browserName) {
       await page.click('#taskForm button[value=save]');
       await page.waitForFunction(() => [...document.querySelectorAll('#todoList .item')].some(e => e.innerText.includes('Range E2E')));
       await page.click('#modeWeek');
-      if (start.getDay() === 0) await page.click('#next'); // range starts on Monday of next week
-      const chips = await page.locator('#calGrid .chip.range', { hasText: 'Range E2E' }).count();
-      assert.ok(chips >= 1 && chips <= 2);
+      if (start.getDay() === 0) await page.click('#next'); // tomorrow is Sunday → the range is in next week's row
+      const bars = page.locator('#calGrid .chip.span', { hasText: 'Range E2E' });
+      const crosses = end.getDay() === 0; // Sat→Sun splits across two week rows
+      assert.equal(await bars.count(), 1, 'one bar per week row, not one box per day');
+      if (!crosses) assert.match(await bars.first().evaluate(e => e.style.gridColumn), /span 2/);
       await page.click('#today'); await page.click('#modeMonth');
       assert.equal(await page.locator('#calGrid .chip.range', { hasText: 'Range E2E' }).count() >= 1, true);
       await page.locator('#todoList .item', { hasText: 'Range E2E' }).locator('.main').click();
@@ -146,6 +148,56 @@ async function run(browserName) {
       await page.keyboard.press('Escape');
       const s2 = (await (await fetch(srv.base + '/api/data')).json()).state;
       assert.equal(Object.keys(s2.done).length, 0);
+    });
+
+    await step('notes render markdown safely and can be edited again', async () => {
+      const { items } = await (await fetch(srv.base + '/api/data')).json();
+      const it = items.find(i => i.kind === 'quiz' && i.due);
+      await page.goto(`${srv.base}/#item=${encodeURIComponent(it.id)}`);
+      await page.waitForFunction(() => document.querySelector('#dlgItem').open);
+      await page.fill('#itemBody .note-box', '**Room** ELLT 116\n- [ ] bring calc\n[syllabus](https://purdue.edu)\n<img src=x onerror=alert(1)>');
+      await page.locator('#itemBody .note-box').blur();
+      await page.waitForSelector('#itemBody .note-view:not([hidden])');
+      assert.equal(await page.locator('#itemBody .note-view strong').innerText(), 'Room');
+      assert.equal(await page.locator('#itemBody .note-view li.task input[type=checkbox]').count(), 1);
+      assert.equal(await page.locator('#itemBody .note-view a').getAttribute('href'), 'https://purdue.edu');
+      assert.equal(await page.locator('#itemBody .note-view img').count(), 0); // HTML stays text
+      await page.click('#itemBody .note-view strong');
+      assert.equal(await page.isVisible('#itemBody .note-box'), true);
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(400);
+      assert.match((await (await fetch(srv.base + '/api/data')).json()).state.notes[it.id], /^\*\*Room\*\*/);
+    });
+
+    await step('notes on a Brightspace item save and come back after a reload', async () => {
+      const { items } = await (await fetch(srv.base + '/api/data')).json();
+      const it = items.find(i => i.kind === 'assignment' && i.due && new Date(i.due) > new Date());
+      await page.goto(`${srv.base}/#item=${encodeURIComponent(it.id)}`);
+      await page.waitForFunction(() => document.querySelector('#dlgItem').open);
+      await page.fill('#itemBody .note-box', 'Room ELLT 116 <script>x</script>');
+      await page.waitForFunction(() => document.querySelector('.note-status').textContent === 'Saved');
+      await page.keyboard.press('Escape');
+      assert.equal((await (await fetch(srv.base + '/api/data')).json()).state.notes[it.id], 'Room ELLT 116 <script>x</script>');
+      await page.reload(); await page.waitForSelector('#todoList .item');
+      assert.ok(await page.locator(`#todoList .item[data-id="${it.id}"] .note-mark`).count() === 1);
+      await page.goto(`${srv.base}/#item=${encodeURIComponent(it.id)}`);
+      await page.waitForFunction(() => document.querySelector('#dlgItem').open);
+      assert.equal(await page.inputValue('#itemBody .note-box'), 'Room ELLT 116 <script>x</script>');
+      assert.equal(await page.innerText('#itemBody .note-view'), 'Room ELLT 116 <script>x</script>'); // shown as text
+      // typing then closing right away still saves (flush on close)
+      await page.click('#itemBody .note-edit');
+      await page.fill('#itemBody .note-box', 'changed fast');
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(400);
+      assert.equal((await (await fetch(srv.base + '/api/data')).json()).state.notes[it.id], 'changed fast');
+      // clearing removes it
+      await page.goto(`${srv.base}/#item=${encodeURIComponent(it.id)}`);
+      await page.waitForFunction(() => document.querySelector('#dlgItem').open);
+      await page.click('#itemBody .note-edit');
+      await page.fill('#itemBody .note-box', '');
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(400);
+      assert.equal((await (await fetch(srv.base + '/api/data')).json()).state.notes[it.id], undefined);
     });
 
     await step('item details open with instructions', async () => {
@@ -208,6 +260,23 @@ async function run(browserName) {
       await page.keyboard.press('Escape');
     });
 
+    await step('exams in Boilerexams courses get "Study on Boilerexams"; others do not', async () => {
+      const d = await (await fetch(srv.base + '/api/data')).json();
+      const withBE = d.items.find(i => i.exam && d.boilerexams[i.courseId]);
+      const without = d.items.find(i => !i.exam && d.boilerexams[i.courseId]);
+      await page.goto(`${srv.base}/#item=${encodeURIComponent(withBE.id)}`);
+      await page.waitForFunction(() => document.querySelector('#dlgItem').open);
+      const btn = page.locator('#itemBody .study-btn');
+      assert.equal(await btn.innerText(), 'Study on Boilerexams ↗');
+      assert.equal(await btn.getAttribute('href'), `https://boilerexams.com/courses/${d.boilerexams[withBE.courseId]}/exams`);
+      assert.equal(await btn.getAttribute('target'), '_blank');
+      await page.keyboard.press('Escape');
+      await page.goto(`${srv.base}/#item=${encodeURIComponent(without.id)}`); // not an exam → no button
+      await page.waitForFunction(() => document.querySelector('#dlgItem').open);
+      assert.equal(await page.locator('#itemBody .study-btn').count(), 0);
+      await page.keyboard.press('Escape');
+    });
+
     await step('announcements tab, unread badge, mark read', async () => {
       assert.equal(await page.isVisible('#annBadge'), true);
       await page.click('#tabAnn');
@@ -233,8 +302,8 @@ async function run(browserName) {
 
     await step('clicking an empty day opens the add-task form for that day', async () => {
       await page.click('#modeMonth');
-      const empty = page.locator('#calGrid .day:not(:has(.chip))').first();
-      await empty.click({ position: { x: 10, y: 60 } });
+      const empty = page.locator('#calGrid .day-items:not(:has(.chip, .more))').first();
+      await empty.click();
       assert.equal(await page.$eval('#dlgTask', d => d.open), true);
       assert.match(await page.inputValue('#taskForm input[name=date]'), /^\d{4}-\d{2}-\d{2}$/);
       await page.keyboard.press('Escape');

@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { buildItems, refreshDue, nextSlot, shortName, currentTerm, viewModel, digestItems, digestMessage, digestLink } from './logic.mjs';
+import { buildItems, refreshDue, nextSlot, shortName, currentTerm, viewModel, digestItems, digestMessage, digestLink, boilerexamsKey } from './logic.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURE = process.argv.includes('--fixture');
@@ -71,7 +71,8 @@ function loadFixture() {
 let cache = FIXTURE ? loadFixture() : readJson('cache.json', null);
 let tasks = readJson('tasks.json', []);
 if (!Array.isArray(tasks)) tasks = [];
-const STATE_DEFAULTS = { done: {}, seenAnnouncements: [], hiddenCourses: {}, notifications: true, lastDigest: null };
+// notes: your own notes on Brightspace items, by item id. Never pruned, so a note survives an item briefly vanishing.
+const STATE_DEFAULTS = { done: {}, seenAnnouncements: [], hiddenCourses: {}, notes: {}, notifications: true, lastDigest: null };
 let state = { ...STATE_DEFAULTS, ...readJson('state.json', {}) };
 delete state.notified; // from the earlier per-item notification design
 const meta = { lastAttemptAt: null, lastError: null, paused: false, retryIndex: 0, nextRetryAt: null, refreshing: null, notifyBlocked: null };
@@ -81,6 +82,32 @@ async function checkNotifyBlock() {
   meta.notifyBlocked = await notificationBlock().catch(() => null);
   return meta.notifyBlocked;
 }
+
+// ---------- Boilerexams ----------
+// Which courses have a Boilerexams page. Checked on start-up, every 6 hours, and right away when a new exam shows up,
+// so every exam gets a "Study on Boilerexams" button whenever that course exists there. Failures keep the last list.
+// DASH_BOILEREXAMS_FILE (tests / demo) reads the list from a file instead of the internet.
+let boilerexams = readJson('boilerexams.json', { fetchedAt: null, courses: [] });
+let beFetching = null;
+function refreshBoilerexams(reason, force = false) {
+  const fresh = boilerexams.fetchedAt && Date.now() - new Date(boilerexams.fetchedAt) < 6 * 3600_000;
+  if ((fresh && !force) || beFetching) return beFetching;
+  beFetching = (async () => {
+    try {
+      const file = process.env.DASH_BOILEREXAMS_FILE || (FIXTURE ? path.join(ROOT, 'fixtures', 'boilerexams.json') : null);
+      const list = file ? JSON.parse(fs.readFileSync(file, 'utf8'))
+        : await (await fetch('https://api.boilerexams.com/courses', { signal: AbortSignal.timeout(15_000), headers: { 'User-Agent': 'academic-dashboard' } })).json();
+      if (!Array.isArray(list)) throw new Error('unexpected reply');
+      const courses = list.filter(c => c && c.abbreviation && c.number && c.flags?.published !== false).map(c => ({ abbreviation: String(c.abbreviation).toUpperCase(), number: Number(c.number) }));
+      boilerexams = { fetchedAt: new Date().toISOString(), courses };
+      if (!FIXTURE) writeJson('boilerexams.json', boilerexams);
+      log(`boilerexams (${reason}): ${courses.length} courses`);
+    } catch (e) { log(`boilerexams (${reason}) failed: ${e.message}; keeping the last list`); }
+    finally { beFetching = null; }
+  })();
+  return beFetching;
+}
+const examIds = () => new Set(itemsOf().filter(i => i.exam).map(i => i.id));
 
 // ---------- view helpers ----------
 const coursesOf = raw => (raw?.courses || []).map(c => ({ id: c.id, name: c.name, code: c.code, short: shortName(c) }));
@@ -114,6 +141,7 @@ async function doRefresh() {
   if (FIXTURE) return;
   const { fetchAll } = await import('./brightspace.mjs');
   try {
+    const examsBefore = examIds();
     const { raw, failedCourses } = await fetchAll(cache?.raw);
     const items = buildItems(raw);
     const firstRun = !cache;
@@ -131,6 +159,9 @@ async function doRefresh() {
     pruneState(items, raw.announcements || []);
     Object.assign(meta, { lastError: null, paused: false, retryIndex: 0, nextRetryAt: null });
     log(`refresh ok: ${items.length} items, ${failedCourses.length} course(s) failed`);
+    // A new exam appeared → check Boilerexams now, not in up to 6 hours.
+    const newExam = items.some(i => i.exam && !examsBefore.has(i.id));
+    refreshBoilerexams(newExam ? 'new exam' : 'scheduled', newExam);
   } catch (e) {
     const kind = e.kind || 'network';
     meta.lastError = { kind, message: String(e.message).slice(0, 300), at: new Date().toISOString() };
@@ -197,6 +228,8 @@ function payload() {
       .map(a => ({ id: a.id, title: a.title, body: a.body, date: a.date || a.createdDate, courseId: a.courseId, firstSeen: cache?.firstSeen?.[`ann:${a.id}`] })),
     tasks,
     state,
+    // course id → Boilerexams key, for courses that exist there
+    boilerexams: Object.fromEntries(courses.map(c => [c.id, boilerexamsKey(c, boilerexams.courses)]).filter(([, k]) => k)),
   };
 }
 
@@ -254,10 +287,12 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/tasks' && req.method === 'POST') {
       const b = await readBody(req);
       const idx = b.id ? tasks.findIndex(t => t.id === b.id) : -1;
+      const wasExam = !!tasks[idx]?.exam;
       const t = cleanTask(b, tasks[idx]);
       if (!t) return send(res, 400, { error: 'a title and a valid date are required (end date can’t be before the start)' });
       if (idx >= 0) tasks[idx] = t; else tasks.push(t);
       writeJson('tasks.json', tasks);
+      if (t.exam && !wasExam) await refreshBoilerexams('exam task', true);
       return send(res, 200, t);
     }
 
@@ -273,6 +308,10 @@ const server = http.createServer(async (req, res) => {
       const b = await readBody(req);
       for (const [k, v] of Object.entries(b.done || {})) v === null ? delete state.done[k] : (state.done[k] = !!v);
       for (const [k, v] of Object.entries(b.hiddenCourses || {})) v === null ? delete state.hiddenCourses[k] : (state.hiddenCourses[k] = !!v);
+      for (const [k, v] of Object.entries(b.notes || {})) {
+        const key = String(k).slice(0, 200), text = v == null ? '' : String(v).slice(0, 5000);
+        text.trim() ? (state.notes[key] = text) : delete state.notes[key]; // empty note = no note
+      }
       if (Array.isArray(b.seenAnnouncements)) state.seenAnnouncements = [...new Set([...state.seenAnnouncements, ...b.seenAnnouncements])];
       if (typeof b.notifications === 'boolean') state.notifications = b.notifications;
       writeJson('state.json', state);
@@ -318,6 +357,7 @@ server.on('error', e => { log(`server error: ${e.message}${e.code === 'EADDRINUS
 server.listen(PORT, '127.0.0.1', () => {
   log(`dashboard on ${URL_SELF}${FIXTURE ? ' (demo data)' : ''}`);
   checkNotifyBlock();
+  refreshBoilerexams('start-up');
   setInterval(checkNotifyBlock, 5 * 60_000);
   if (!FIXTURE) { tick(); setInterval(tick, 60_000); }
 });

@@ -41,9 +41,15 @@ It answers at a glance:
 - Header: Purdue logo (links to myPurdue in a new tab) · "Academic Dashboard" · last/next refresh · Refresh · 🔔 Notifications · Courses. Banner row only when something is wrong.
 - Tabs: **Calendar & To-do** and **Announcements** (unread badge).
 - To-do column: Overdue · Today (including items done today) · Tomorrow · This week · Later ▸ · No due date ▸, plus "+ Add task". Rows have a checkbox, course tag, title and badges (urgency, EXAM, OPENS, timed, points, NEW).
-- Calendar: month (Monday start, 3 chips per day then "+N more") or week (everything). Clicking an empty day adds a task on it; clicking an item opens its details (dates, points, time limit, instructions as plain text, link to Brightspace, done toggle). **Past-due assignments** link to the course's assignment list (Brightspace answers 403 on a closed submission page), plus a secondary "Submission page (may be closed)" link. Announced exams and announcements link to the announcement page (`/d2l/le/news/{course}/{id}/view`).
+- Calendar: month (**Sunday** start, 3 boxes per day then "+N more"; **multi-day tasks are one bar across their days**, packed into lanes above the day's boxes, with the title repeated on each week row they continue onto) or week (everything). Clicking an empty day adds a task on it; clicking an item opens its details (dates, points, time limit, instructions as plain text, link to Brightspace, done toggle). **Past-due assignments** link to the course's assignment list (Brightspace answers 403 on a closed submission page), plus a secondary "Submission page (may be closed)" link. Announced exams and announcements link to the announcement page (`/d2l/le/news/{course}/{id}/view`).
 - Footer credits: "Made by Lucas Flowers · lucasflowers.net" with the site's icon.
 - Theme: one pure-black, high-contrast theme; neutral white accents; gold `#cfb991` for exams and the dashboard icon. Stacks into one column under 900 px.
+
+## 6b. Boilerexams
+Every exam (exam quiz, announced exam, or exam task with a course) in a course that exists on [Boilerexams](https://boilerexams.com/courses) gets a **Study on Boilerexams ↗** button linking to `https://boilerexams.com/courses/{SUBJ}{NUMBER}/exams`. If the course isn't there, no button. The list comes from `https://api.boilerexams.com/courses` (published courses only) and is cached in `data/boilerexams.json`: refreshed on start-up, every 6 h, and immediately when a new exam appears or a task becomes an exam. Failures keep the last list. Matching is exact on subject+number, else subject + first 3 digits (Brightspace's `CHM 11510` lecture → Boilerexams `CHM11500`).
+
+## 6a. My notes
+Every Brightspace item (assignment, quiz, exam, announced exam) has a **My notes** box in its details window. It supports **Markdown** (headings, bold/italic/strike, code, lists, `- [ ]` checklists, quotes, links; rendered with DOM nodes only, http(s) links only) and shows formatted until clicked to edit. It saves as you type (500 ms), on blur, and when the window closes, and stores to `state.notes[itemId]` (5,000 chars; blank = delete; never pruned). Items with a note show "📝 note" in the to-do list and 📝 on calendar chips, with the note in the hover text. Manual tasks keep their notes on the task.
 
 ## 6. Manual tasks
 Title (required), date (required), **end date (optional, for a range like Sat–Sun)**, time (optional; blank = all day, due 23:59), course (optional), exam flag, notes. Create / edit / delete / tick. Enter saves; Esc and Cancel don't.
@@ -64,7 +70,7 @@ Newest first, filter by course, unread dot and badge, marked read after 2 s on s
 ## 9. Server & API
 - `server.mjs`: `node:http`, bound to **127.0.0.1** only. Host-header check (DNS-rebinding guard); non-GET requests must be JSON (CORS preflight never answered, so other sites can't call it); bodies capped at 1 MB (413); static files confined to `public/`.
 - Data in `data/`: `cache.json`, `tasks.json`, `state.json`, `server.log` (capped at 1 MB). Saves write a temp file, fsync it, keep the previous version as `*.bak`, then rename it into place (atomic). A damaged file is set aside as `*.bad` and restored from `*.bak`; only if that is unusable too does it start from defaults. Everything survives restarts and reboots.
-- API: `GET /api/data` · `POST /api/refresh` · `POST /api/tasks` · `DELETE /api/tasks/:id` · `POST /api/state` (done, hiddenCourses, seenAnnouncements, notifications) · `POST /api/notify-test` · `POST /api/notification-settings` · `POST /api/signin`.
+- API: `GET /api/data` · `POST /api/refresh` · `POST /api/tasks` · `DELETE /api/tasks/:id` · `POST /api/state` (done, hiddenCourses, seenAnnouncements, notes, notifications) · `POST /api/notify-test` · `POST /api/notification-settings` · `POST /api/signin`.
 - Env overrides: `DASH_PORT`, `DASH_DATA`; test hooks `DASH_MCP_CMD`, `DASH_TOAST_LOG`, `DASH_NOTIFY_BLOCK`, `DASH_TOTAL_TIMEOUT`, `DASH_COURSE_TIMEOUT`.
 
 ## 10. Install & run

@@ -69,6 +69,7 @@ Tell them briefly:
 - Logs: `data\server.log`. The user's cache, tasks and settings: `data\` (never share or commit it).
 
 ## Working on the code
+- The **Study on Boilerexams** button is automatic: the server fetches Boilerexams' course list (`api.boilerexams.com/courses`) on start-up, every 6 h, and whenever a new exam appears, then matches courses in `boilerexamsKey` (`logic.mjs`). Never hard-code a course list; if a course exists there, its exams get the button, otherwise none.
 - `npm test` must pass: `test.mjs` holds the unit tests, `test-server.mjs` runs the real server against `fixtures/fake-mcp.mjs`. `npm run demo` serves fictional data from `data-demo/`.
 - `logic.mjs` is shared by the server, the browser and the tests (`viewModel`, status, exams, digest). Keep rules there, in one place.
 - Test hooks (env vars): `DASH_PORT`, `DASH_DATA`, `DASH_MCP_CMD` (JSON array command for a fake MCP server), `DASH_TOAST_LOG` (write notifications to a file), `DASH_NOTIFY_BLOCK` (pretend Windows blocks them), `DASH_TOTAL_TIMEOUT`, `DASH_COURSE_TIMEOUT`.

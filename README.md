@@ -65,6 +65,7 @@ When it's done, bookmark **http://localhost:4321**.
 |---|---|
 | Mark something done | Tick its checkbox (untick to undo) |
 | See details / instructions | Click the item |
+| Add your own notes to an assignment or exam | Click it and type in **My notes**. Markdown works (**bold**, lists, `- [ ]` checklists, links). Saves automatically; 📝 marks items with notes |
 | Add your own task | **+ Add task**, press **N**, or click an empty calendar day. Add an **End date** for something that spans days (e.g. Sat–Sun). Tick **This is an exam** for exams. |
 | Edit or delete your task | Click it |
 | Jump to today | **Today**, or press **T** |
@@ -73,6 +74,8 @@ When it's done, bookmark **http://localhost:4321**.
 | Update right now | **↻ Refresh** (about 2 minutes) |
 
 **Colors:** each course has its own color. Urgency always appears as a labeled badge: red **OVERDUE**, orange **TODAY**, yellow **TOMORROW**. **Gold = exam.** A dashed outline on the calendar means "**opens** at this time".
+
+**Study on Boilerexams:** exams in courses that [Boilerexams](https://boilerexams.com/courses) covers get a gold **Study on Boilerexams** button in their details, linking to that course's practice exams. It's checked automatically, including for new exams.
 
 **Exams** are picked up from quizzes named like "Exam 2" or "Midterm" (not practice quizzes), and from announcements that schedule one (e.g. *"Exam 1 is Thurs. Sept. 24, 8:00-9:00 PM"*). Mentions of an exam inside a deadline ("sign up for a seat by…", "Exam Agreement due…") are ignored. If an exam is missing, add it yourself and tick **This is an exam**.
 

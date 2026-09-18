@@ -19,7 +19,7 @@ async function startServer({ mode = 'ok', extraEnv = {}, dir } = {}) {
   const env = {
     ...process.env, DASH_PORT: String(port), DASH_DATA: dir,
     DASH_MCP_CMD: JSON.stringify(['node', path.join(ROOT, 'fixtures', 'fake-mcp.mjs')]),
-    DASH_TOAST_LOG: path.join(dir, 'toasts.log'), FAKE_MODE: mode, FAKE_LOG: path.join(dir, 'fake.log'), ...extraEnv,
+    DASH_TOAST_LOG: path.join(dir, 'toasts.log'), DASH_BOILEREXAMS_FILE: path.join(ROOT, 'fixtures', 'boilerexams-test.json'), FAKE_MODE: mode, FAKE_LOG: path.join(dir, 'fake.log'), ...extraEnv,
   };
   const child = spawn(process.execPath, [path.join(ROOT, 'server.mjs')], { env, stdio: 'ignore', windowsHide: true });
   const base = `http://localhost:${port}`;
@@ -63,6 +63,8 @@ test('normal refresh: data, exams, skipped courses, start-up digest', async () =
     assert.doesNotMatch(text, /Project|Lab 4/);
     assert.match(toasts[0].title, /1 due today · 1 early tomorrow/);
     assert.match(toasts[0].url, /#due=bs%3A101%3Aassignment%3A1,bs%3A102%3Aassignment%3A4$/); // click highlights exactly those
+    // Boilerexams: MA 16200 exists there, CS 15900 doesn't
+    assert.deepEqual(d.boilerexams, { 101: 'MA16200' });
   } finally { await s.stop(); }
 });
 
@@ -131,7 +133,8 @@ test('tasks, done state and settings survive a restart', async () => {
   await s.settled();
   const t = (await s.post('/api/tasks', { title: 'MA 162 Exam 1 <script>', date: dayKey(new Date()), time: '20:00', courseId: 101, exam: true })).body;
   assert.equal(t.exam, true);
-  await s.post('/api/state', { done: { 'bs:101:assignment:1': true }, notifications: false });
+  await s.post('/api/state', { done: { 'bs:101:assignment:1': true }, notifications: false, notes: { 'bs:101:assignment:1': 'Do problems 3-7 <b>first</b>', 'ex:101:x': 'temp' } });
+  await s.post('/api/state', { notes: { 'ex:101:x': '   ' } }); // blank = delete
   await s.stop();
   s = await startServer({ dir });
   try {
@@ -139,6 +142,7 @@ test('tasks, done state and settings survive a restart', async () => {
     assert.equal(d.tasks[0].title, 'MA 162 Exam 1 <script>');
     assert.equal(d.state.done['bs:101:assignment:1'], true);
     assert.equal(d.state.notifications, false);
+    assert.deepEqual(d.state.notes, { 'bs:101:assignment:1': 'Do problems 3-7 <b>first</b>' });
     // notifications off → no digest on the second start
     await new Promise(r => setTimeout(r, 500));
     const toasts = s.read('toasts.log').trim().split('\n').filter(Boolean);

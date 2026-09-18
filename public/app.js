@@ -1,4 +1,4 @@
-import { isDone, isVisible, dayKey, addDays, linkify, courseColors, viewModel, parseLink, brightspaceOrigin, announcementUrl, assignmentListUrl, itemDays } from '/logic.mjs';
+import { isDone, isVisible, dayKey, addDays, linkify, courseColors, viewModel, parseLink, brightspaceOrigin, announcementUrl, assignmentListUrl, itemDays, parseMarkdown, layoutSpans, sundayOf, boilerexamsUrl } from '/logic.mjs';
 
 const $ = s => document.querySelector(s);
 let data = null;
@@ -45,6 +45,8 @@ function model() {
 const courseOf = i => courseById[i.courseId];
 const colorOf = i => courseOf(i)?.color || '#cbd5e1';
 const tagText = i => courseOf(i)?.short || 'Personal';
+// Your note on an item: task notes live on the task, Brightspace item notes in state.notes.
+const noteOf = i => (i.kind === 'task' ? i.notes : data.state.notes?.[i.id]) || '';
 
 // ---------- api ----------
 const api = (path, body, method = 'POST') => fetch(path, {
@@ -148,7 +150,7 @@ function itemRow(i, { showDay = false } = {}) {
   if (i.isNew && !i.done) badges.push(h('span', { class: 'badge b-new' }, 'NEW'));
   if (i.kind === 'task') badges.push(h('span', { title: 'Manual task' }, '✎'));
   if (i.done && (i.submitted || i.graded) && typeof data.state.done[i.id] !== 'boolean') badges.push(h('span', {}, i.submitted ? '✓ submitted' : '✓ graded'));
-  if (i.kind === 'task' && i.notes) badges.push(h('span', { title: i.notes }, '📝'));
+  if (noteOf(i)) badges.push(h('span', { class: 'note-mark', title: noteOf(i) }, '📝 note'));
 
   return h('div', { class: `item${i.done ? ' done' : ''}${i.exam ? ' exam' : ''}`, 'data-id': i.id },
     h('input', { type: 'checkbox', checked: i.done, 'aria-label': `Mark “${i.title}” done`, onchange: e => toggleDone(i, e.target.checked) }),
@@ -184,20 +186,20 @@ function renderTodo({ all }) {
 }
 
 // ----- calendar -----
-const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-const mondayOf = d => { d = new Date(d); d.setHours(0, 0, 0, 0); return addDays(d, -((d.getDay() + 6) % 7)); };
+const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const midnight = d => { d = new Date(d); d.setHours(0, 0, 0, 0); return d; };
 
 function renderCalendar({ all, now }) {
   const c = view.cursor;
   let start, days;
   if (view.mode === 'month') {
     const first = new Date(c.getFullYear(), c.getMonth(), 1);
-    start = mondayOf(first);
+    start = sundayOf(first);
     const last = new Date(c.getFullYear(), c.getMonth() + 1, 0);
-    days = Math.round((mondayOf(addDays(last, 7)) - start) / 864e5); // whole weeks through the month's last day
+    days = Math.round((sundayOf(addDays(last, 7)) - start) / 864e5); // whole weeks through the month's last day
     $('#calTitle').textContent = c.toLocaleDateString([], { month: 'long', year: 'numeric' });
   } else {
-    start = mondayOf(c);
+    start = sundayOf(c);
     days = 7;
     const end = addDays(start, 6);
     $('#calTitle').textContent = `${start.toLocaleDateString([], { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}`;
@@ -205,32 +207,65 @@ function renderCalendar({ all, now }) {
   $('#modeMonth').setAttribute('aria-pressed', view.mode === 'month');
   $('#modeWeek').setAttribute('aria-pressed', view.mode === 'week');
 
-  // Bucket by local day: due chips + "opens" chips.
-  const byDay = {};
-  const push = (k, v) => (byDay[k] ||= []).push(v);
+  // Bucket by local day. byDay = everything on that day (for the day popup); singles = what gets a box in the cell.
+  // Multi-day tasks are drawn once per week row as a bar across their days instead.
+  const byDay = {}, singles = {}, spans = [];
+  const push = (map, k, v) => (map[k] ||= []).push(v);
   for (const i of all) {
-    if (i.due && (i.st !== 'expired' || i.done)) for (const k of itemDays(i)) push(k, { i, kind: 'due' });
-    if (i.start && i.opens) push(dayKey(i.start), { i, kind: 'opens' });
+    if (i.due && (i.st !== 'expired' || i.done)) {
+      for (const k of itemDays(i)) push(byDay, k, { i, kind: 'due' });
+      if (i.rangeStart) spans.push({ id: i.id, i, startDay: midnight(i.rangeStart), endDay: midnight(i.due) });
+      else push(singles, dayKey(i.due), { i, kind: 'due' });
+    }
+    if (i.start && i.opens) { push(byDay, dayKey(i.start), { i, kind: 'opens' }); push(singles, dayKey(i.start), { i, kind: 'opens' }); }
   }
   const todayKey = dayKey(now);
   const limit = view.mode === 'month' ? 3 : Infinity;
-  const cells = [];
-  for (let n = 0; n < days; n++) {
-    const d = addDays(start, n), k = dayKey(d);
-    const entries = byDay[k] || [];
-    const chips = entries.slice(0, limit).map(chipFor);
-    const cls = ['day', view.mode === 'week' && 'week', view.mode === 'month' && d.getMonth() !== c.getMonth() && 'other', k === todayKey && 'is-today'].filter(Boolean).join(' ');
-    cells.push(h('div', { class: cls, onclick: e => { if (e.target === e.currentTarget || e.target.classList.contains('num')) openDay(d, entries); } },
-      view.mode === 'month' ? h('div', { class: 'num' }, d.getDate()) : null,
-      chips,
-      entries.length > limit ? h('button', { class: 'more', type: 'button', onclick: () => openDay(d, entries) }, `+${entries.length - limit} more`) : null));
+  const rows = [];
+  for (let w = 0; w < days / 7; w++) {
+    const ws = addDays(start, w * 7);
+    const { segs, lanes } = layoutSpans(spans, ws);
+    // grid rows: 1 = day number, 2..lanes+1 = bars, last = the day's own boxes
+    const kids = [];
+    for (let n = 0; n < 7; n++) {
+      const d = addDays(ws, n), k = dayKey(d), col = n + 1;
+      const all_ = byDay[k] || [], own = singles[k] || [];
+      const open = e => { if (e.target === e.currentTarget) openDay(d, all_); };
+      kids.push(h('div', { class: ['day', view.mode === 'week' && 'week', view.mode === 'month' && d.getMonth() !== c.getMonth() && 'other', k === todayKey && 'is-today'].filter(Boolean).join(' '),
+        style: { 'grid-column': String(col), 'grid-row': '1 / -1' }, onclick: open }));
+      kids.push(h('div', { class: `num${k === todayKey ? ' today' : ''}`, style: { 'grid-column': String(col), 'grid-row': '1' }, onclick: () => openDay(d, all_) },
+        view.mode === 'month' ? d.getDate() : ''));
+      kids.push(h('div', { class: 'day-items', style: { 'grid-column': String(col), 'grid-row': String(lanes + 2) }, onclick: open },
+        own.slice(0, limit).map(chipFor),
+        own.length > limit ? h('button', { class: 'more', type: 'button', onclick: () => openDay(d, all_) }, `+${own.length - limit} more`) : null));
+    }
+    for (const s of segs) kids.push(spanChip(s));
+    rows.push(h('div', { class: `week-row${view.mode === 'week' ? ' tall' : ''}`, style: { 'grid-template-rows': `${view.mode === 'month' ? '22px' : '4px'} ${lanes ? `repeat(${lanes}, 26px) ` : ''}1fr` } }, kids));
   }
   const heads = DOW.map((w, n) => h('div', { class: 'dow' }, view.mode === 'week' ? `${w} ${addDays(start, n).getMonth() + 1}/${addDays(start, n).getDate()}` : w));
-  $('#calGrid').replaceChildren(h('div', { class: 'grid' }, heads, cells));
+  $('#calGrid').replaceChildren(h('div', { class: 'cal-head' }, heads), ...rows);
 }
 
 // '8:00 PM–9:00 PM' → '8p–9p', '11:59 PM' → '11:59p' (month cells are narrow)
 const compactTime = t => t.split('–').map(p => p.replace(':00', '').replace(/\s?([AP])M/i, (_, x) => x.toLowerCase())).join('–');
+
+// A multi-day task as one bar across its days in this week row; the title repeats on each row it continues onto.
+function spanChip(s) {
+  const i = s.i;
+  const time = i.allDay ? '' : fmtTime(i.due);
+  return h('button', {
+    type: 'button',
+    class: ['chip', 'range', 'span', i.exam && 'exam', i.done && 'done', s.contLeft && 'cont-left', s.contRight && 'cont-right', !i.done && (i.st === 'today' || i.st === 'overdue') && 'urgent'].filter(Boolean).join(' '),
+    style: { '--c': colorOf(i), 'grid-column': `${s.col + 1} / span ${s.span}`, 'grid-row': String(s.lane + 2) },
+    title: `${tagText(i)} · ${i.title} · ${rangeLabel(i)}${noteOf(i) ? '\n📝 ' + noteOf(i) : ''}`,
+    onclick: e => { e.stopPropagation(); openItem(i); },
+  }, s.contLeft ? h('span', { class: 'cont', 'aria-hidden': 'true' }, '◂ ') : null,
+  i.exam ? h('span', { class: 'x' }, 'EXAM') : null,
+  h('span', { class: 't' }, tagText(i)), i.title,
+  !s.contRight && time ? h('span', { class: 'muted' }, ` · due ${compactTime(time)}`) : null,
+  s.contRight ? h('span', { class: 'cont', 'aria-hidden': 'true' }, ' ▸') : null,
+  noteOf(i) ? h('span', { class: 'chip-note' }, ' 📝') : null);
+}
 
 function chipFor({ i, kind }) {
   const urgent = kind === 'due' && !i.done && (i.st === 'overdue' || i.st === 'today');
@@ -238,12 +273,12 @@ function chipFor({ i, kind }) {
   const time = kind === 'opens' ? fmtTime(i.start) : (i.allDay ? '' : dueLabel(i));
   return h('button', {
     type: 'button', class: ['chip', kind === 'opens' && 'opens', kind === 'due' && i.exam && 'exam', i.rangeStart && 'range', i.done && kind === 'due' && 'done', urgent && 'urgent'].filter(Boolean).join(' '),
-    style: { '--c': colorOf(i) }, title: `${tagText(i)} · ${label}${time ? ' · ' + time : ''}`,
+    style: { '--c': colorOf(i) }, title: `${tagText(i)} · ${label}${time ? ' · ' + time : ''}${noteOf(i) ? '\n📝 ' + noteOf(i) : ''}`,
     onclick: e => { e.stopPropagation(); openItem(i); },
   }, kind === 'due' && i.exam ? h('span', { class: 'x' }, 'EXAM') : null,
   view.mode === 'week' ? h('span', { class: 't' }, tagText(i)) : null, // month cells are narrow: color bar + legend identify the course
   view.mode === 'month' && time ? h('span', { class: 't' }, compactTime(time)) : null,
-  label, view.mode === 'week' && time ? ` · ${time}` : '');
+  label, view.mode === 'week' && time ? ` · ${time}` : '', kind === 'due' && noteOf(i) ? h('span', { class: 'chip-note', 'aria-label': 'has a note' }, ' 📝') : null);
 }
 
 function renderLegend({ visible }) {
@@ -268,6 +303,8 @@ function openItem(i) {
     h('h2', {}, h('span', { class: 'tag', style: { '--c': colorOf(i) } }, tagText(i)), ' ', i.title),
     h('dl', {}, rows.flatMap(([k, v]) => [h('dt', {}, k), h('dd', {}, String(v))])),
     i.instructions ? [h('strong', {}, 'Instructions'), h('div', { class: 'instr' }, linkNodes(i.instructions))] : null,
+    noteEditor(i),
+    studyButton(i),
     h('p', { class: 'links' }, ...brightspaceLinks(i),
       i.kind === 'exam' ? h('a', { href: announcementUrl(brightspaceOrigin(data.items), i.courseId, i.sourceAnnouncement), target: '_blank', rel: 'noopener noreferrer' }, 'Open the announcement in Brightspace ↗') : null, ' ',
       h('label', { style: { display: 'inline-flex', gap: '6px', 'align-items': 'center' } },
@@ -284,7 +321,77 @@ function brightspaceLinks(i) {
   return [ext(i.url, 'Open in Brightspace ↗')];
 }
 
+// Markdown blocks (from logic.mjs) → DOM. Only createElement/textContent; links must be http(s).
+function renderInline(tokens) {
+  return tokens.map(t => {
+    if (t.t === 'text') return t.v;
+    if (t.t === 'code') return h('code', {}, t.v);
+    if (t.t === 'link') return /^https?:\/\//i.test(t.href) ? h('a', { href: t.href, target: '_blank', rel: 'noopener noreferrer' }, renderInline(t.kids)) : renderInline(t.kids);
+    return h({ b: 'strong', i: 'em', s: 'del' }[t.t], {}, renderInline(t.kids));
+  });
+}
+function renderMarkdown(src) {
+  return parseMarkdown(src).map(b => {
+    if (b.type === 'h') return h(`h${b.level + 2}`, {}, renderInline(b.inline));
+    if (b.type === 'p') return h('p', {}, renderInline(b.inline));
+    if (b.type === 'quote') return h('blockquote', {}, renderInline(b.inline));
+    if (b.type === 'code') return h('pre', {}, h('code', {}, b.text));
+    if (b.type === 'hr') return h('hr');
+    return h(b.type, {}, b.items.map(it => h('li', { class: it.checked == null ? null : 'task' },
+      it.checked == null ? null : h('input', { type: 'checkbox', checked: it.checked, disabled: true }), renderInline(it.inline))));
+  });
+}
+
+// "My notes" on a Brightspace item: saves as you type (and when the window closes).
+let flushNote = null;
+function noteEditor(i) {
+  let timer = null, last = noteOf(i);
+  const status = h('span', { class: 'note-status muted', 'aria-live': 'polite' });
+  const save = async text => {
+    clearTimeout(timer);
+    if (text === last) return;
+    last = text;
+    status.textContent = 'Saving…';
+    try {
+      data.state = await api('/api/state', { notes: { [i.id]: text } });
+      // Trust the server's copy, not the request: an out-of-date server would silently drop the note.
+      const stored = data.state.notes?.[i.id] || '';
+      if (stored !== (text.trim() ? text : '')) { status.textContent = 'Not saved: restart the dashboard (stop.cmd, then start.cmd)'; last = null; return; }
+      status.textContent = 'Saved'; render();
+    }
+    catch { status.textContent = 'Not saved. Is the dashboard running?'; last = null; }
+  };
+  const box = h('textarea', { class: 'note-box', rows: 5, maxlength: 5000, 
+    oninput: e => { status.textContent = ''; clearTimeout(timer); timer = setTimeout(() => save(e.target.value), 500); },
+    onblur: () => { save(box.value); showView(); } });
+  box.value = last;
+  // Formatted view when there's a note; click it (or "Edit") to change it.
+  const viewEl = h('div', { class: 'note-view md', tabindex: 0, role: 'button', title: 'Click to edit', onclick: e => { if (!e.target.closest('a')) showEdit(); }, onkeydown: e => e.key === 'Enter' && showEdit() });
+  const editBtn = h('button', { type: 'button', class: 'note-edit', onclick: () => showEdit() }, 'Edit');
+  function showView() {
+    if (!box.value.trim()) return showEdit(false);
+    viewEl.replaceChildren(...renderMarkdown(box.value));
+    viewEl.hidden = false; editBtn.hidden = false; box.hidden = true;
+  }
+  function showEdit(focus = true) {
+    viewEl.hidden = true; editBtn.hidden = true; box.hidden = false;
+    if (focus) box.focus();
+  }
+  flushNote = () => save(box.value);
+  const wrap = h('div', { class: 'notes' }, h('div', { class: 'note-label' }, h('strong', {}, 'My notes'), editBtn, status), viewEl, box);
+  showView();
+  return wrap;
+}
+$('#dlgItem').addEventListener('close', () => { flushNote?.(); flushNote = null; });
+
+// Exams in a course that Boilerexams covers get a button to its practice exams; otherwise nothing.
+function studyButton(i) {
+  const key = i.exam && i.courseId != null ? data.boilerexams?.[i.courseId] : null;
+  return key ? h('p', {}, h('a', { class: 'study-btn', href: boilerexamsUrl(key), target: '_blank', rel: 'noopener noreferrer' }, 'Study on Boilerexams ↗')) : null;
+}
+
 function openAnnouncement(a) {
+  flushNote = null;
   const color = data.colors[a.courseId] || '#cbd5e1';
   $('#itemBody').replaceChildren(h('div', { class: 'detail' },
     h('h2', {}, h('span', { class: 'tag', style: { '--c': color } }, courseById[a.courseId]?.short || 'Other'), ' ', a.title),
@@ -323,6 +430,8 @@ function openTaskForm(task, date) {
   f.exam.checked = !!task?.exam;
   f.dataset.id = task?.id || '';
   $('#taskDelete').hidden = !task;
+  const study = $('#taskStudy');
+  study.replaceChildren(...(task ? [studyButton({ ...task, exam: task.exam })].filter(Boolean) : []));
   $('#dlgTask').returnValue = ''; // otherwise Esc re-uses the last "save"
   $('#dlgTask').showModal();
   f.title.focus();

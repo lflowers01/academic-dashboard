@@ -315,6 +315,97 @@ export function parseLink(hash) {
   return ids.length ? { kind: m[1], ids } : null;
 }
 
+// ---- markdown for notes ----
+// Returns blocks the page renders with createElement/textContent only, so a note can never inject HTML.
+// Supports: # headings, **bold**, *italic*/_italic_, ~~strike~~, `code`, [links](https://…), bare URLs,
+// - / * / 1. lists, - [ ] / - [x] checklists, > quotes, ``` code blocks, --- rules.
+export function parseInline(text) {
+  const out = [];
+  const re = /(`[^`]+`)|\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|\*\*(.+?)\*\*|~~(.+?)~~|(?<![\w*])\*([^*\s](?:[^*]*[^*\s])?)\*(?!\w)|(?<![\w_])_([^_\s](?:[^_]*[^_\s])?)_(?![\w_])|(https?:\/\/[^\s<>"')\]]*[^\s<>"')\].,;:!?])/g;
+  let last = 0, m;
+  while ((m = re.exec(text))) {
+    if (m.index > last) out.push({ t: 'text', v: text.slice(last, m.index) });
+    if (m[1]) out.push({ t: 'code', v: m[1].slice(1, -1) });
+    else if (m[2]) out.push({ t: 'link', href: m[3], kids: parseInline(m[2]) });
+    else if (m[4]) out.push({ t: 'b', kids: parseInline(m[4]) });
+    else if (m[5]) out.push({ t: 's', kids: parseInline(m[5]) });
+    else if (m[6] || m[7]) out.push({ t: 'i', kids: parseInline(m[6] || m[7]) });
+    else if (m[8]) out.push({ t: 'link', href: m[8], kids: [{ t: 'text', v: m[8] }] });
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) out.push({ t: 'text', v: text.slice(last) });
+  return out;
+}
+
+export function parseMarkdown(src) {
+  const lines = String(src || '').replace(/\r\n?/g, '\n').split('\n');
+  const blocks = [];
+  let para = null, list = null;
+  const endPara = () => { if (para) { blocks.push({ type: 'p', inline: parseInline(para.join('\n')) }); para = null; } };
+  const endList = () => { if (list) { blocks.push(list); list = null; } };
+  for (let n = 0; n < lines.length; n++) {
+    const line = lines[n];
+    if (/^\s*```/.test(line)) { // fenced code
+      endPara(); endList();
+      const code = [];
+      while (++n < lines.length && !/^\s*```/.test(lines[n])) code.push(lines[n]);
+      blocks.push({ type: 'code', text: code.join('\n') });
+      continue;
+    }
+    let m;
+    if (!line.trim()) { endPara(); endList(); continue; }
+    if ((m = line.match(/^(#{1,3})\s+(.*)$/))) { endPara(); endList(); blocks.push({ type: 'h', level: m[1].length, inline: parseInline(m[2]) }); continue; }
+    if (/^\s*(-{3,}|\*{3,})\s*$/.test(line)) { endPara(); endList(); blocks.push({ type: 'hr' }); continue; }
+    if ((m = line.match(/^>\s?(.*)$/))) { endPara(); endList(); blocks.push({ type: 'quote', inline: parseInline(m[1]) }); continue; }
+    if ((m = line.match(/^\s*([-*+]|\d+[.)])\s+(?:\[([ xX])\]\s+)?(.*)$/))) {
+      endPara();
+      const kind = /\d/.test(m[1]) ? 'ol' : 'ul';
+      if (!list || list.type !== kind) { endList(); list = { type: kind, items: [] }; }
+      list.items.push({ inline: parseInline(m[3]), checked: m[2] == null ? null : m[2] !== ' ' });
+      continue;
+    }
+    endList();
+    (para ||= []).push(line);
+  }
+  endPara(); endList();
+  return blocks;
+}
+
+// Month/week layout for one week row: multi-day items become bars (segments) packed into lanes.
+// items: [{ id, startDay: Date(00:00), endDay: Date(00:00) }]; weekStart: Date(00:00) of the row's first day.
+export function layoutSpans(items, weekStart) {
+  const weekEnd = addDays(weekStart, 6);
+  const dayIdx = d => Math.round((startOfDay(d) - weekStart) / DAY);
+  const segs = [];
+  for (const it of items) {
+    if (it.endDay < weekStart || it.startDay > weekEnd) continue;
+    const a = Math.max(0, dayIdx(it.startDay)), b = Math.min(6, dayIdx(it.endDay));
+    segs.push({ ...it, col: a, span: b - a + 1, contLeft: it.startDay < weekStart, contRight: it.endDay > weekEnd });
+  }
+  segs.sort((x, y) => x.col - y.col || y.span - x.span);
+  const laneEnds = [];
+  for (const s of segs) {
+    let lane = laneEnds.findIndex(end => end < s.col);
+    if (lane < 0) { lane = laneEnds.length; laneEnds.push(-1); }
+    laneEnds[lane] = s.col + s.span - 1;
+    s.lane = lane;
+  }
+  return { segs, lanes: laneEnds.length };
+}
+// Boilerexams (boilerexams.com) keys courses as SUBJECT+5-digit number, e.g. "MA16200", "CHM11500".
+// Brightspace may use a section-specific number ("CHM 11510" lecture) → match exact first, then same subject + first 3 digits.
+export function boilerexamsKey(course, beCourses) {
+  const m = String(course.code || '').match(SECTION_RE) || String(course.name || '').match(/\b()([A-Z]{2,5})\s*(\d{5})\b/);
+  if (!m || !Array.isArray(beCourses)) return null;
+  const subj = m[2].toUpperCase(), num = Number(m[3]);
+  const exact = beCourses.find(c => c.abbreviation === subj && Number(c.number) === num);
+  const near = exact || beCourses.find(c => c.abbreviation === subj && Math.floor(Number(c.number) / 100) === Math.floor(num / 100));
+  return near ? `${near.abbreviation}${near.number}` : null;
+}
+export const boilerexamsUrl = key => `https://boilerexams.com/courses/${encodeURIComponent(key)}/exams`;
+
+export const sundayOf = d => { d = startOfDay(d); return addDays(d, -d.getDay()); };
+
 // Split plain text into text/link segments. Rendering uses textContent, so no HTML is ever interpreted.
 export function linkify(text) {
   const out = [], re = /https?:\/\/[^\s<>"')\]]*[^\s<>"')\].,;:!?]/g; // don't swallow trailing punctuation

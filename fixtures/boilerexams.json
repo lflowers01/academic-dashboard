@@ -1,0 +1,34 @@
+[
+ {
+  "abbreviation": "MA",
+  "number": 16100,
+  "name": "Plane Analytic Geometry And Calculus I",
+  "flags": {
+   "published": true
+  }
+ },
+ {
+  "abbreviation": "CS",
+  "number": 15900,
+  "name": "C Programming",
+  "flags": {
+   "published": true
+  }
+ },
+ {
+  "abbreviation": "CHM",
+  "number": 11500,
+  "name": "General Chemistry",
+  "flags": {
+   "published": true
+  }
+ },
+ {
+  "abbreviation": "PHYS",
+  "number": 17200,
+  "name": "Modern Mechanics",
+  "flags": {
+   "published": false
+  }
+ }
+]

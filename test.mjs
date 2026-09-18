@@ -218,6 +218,50 @@ test('date-range tasks: today while inside, sorted by start before, every day on
   assert.deepEqual(L.itemDays(s), ['2026-09-19']);
 });
 
+test('markdown notes: blocks and inline, never raw HTML', () => {
+  const b = L.parseMarkdown('# Study\n**Ch 3** and *4*, ~~5~~ `eq 2`\n\n- [ ] flashcards\n- [x] read\n1. one\n2. two\n> room ELLT 116\n---\n<script>alert(1)</script> see [notes](https://x.com/a) or https://purdue.edu.\n```\n**not bold**\n```');
+  assert.deepEqual(b.map(x => x.type), ['h', 'p', 'ul', 'ol', 'quote', 'hr', 'p', 'code']);
+  assert.deepEqual(b[1].inline.map(t => t.t), ['b', 'text', 'i', 'text', 's', 'text', 'code']);
+  assert.deepEqual(b[2].items.map(i => i.checked), [false, true]);
+  const p = b[6].inline;
+  assert.equal(p[0].v, '<script>alert(1)</script> see '); // stays text
+  assert.deepEqual(p.filter(t => t.t === 'link').map(t => t.href), ['https://x.com/a', 'https://purdue.edu']);
+  assert.equal(b[7].text, '**not bold**');
+  assert.deepEqual(L.parseInline('[x](javascript:alert(1))').map(t => t.t), ['text']); // only http(s) links
+  assert.deepEqual(L.parseInline('2*3*4 and snake_case_name').map(t => t.t), ['text']); // no false italics
+});
+
+test('week layout: Sunday start, multi-day bars packed into lanes, continuation flags', () => {
+  assert.equal(L.sundayOf(at(2026, 9, 18)).getDay(), 0);
+  assert.equal(L.dayKey(L.sundayOf(at(2026, 9, 18))), '2026-09-13');
+  assert.equal(L.dayKey(L.sundayOf(at(2026, 9, 13))), '2026-09-13');
+  const ws = at(2026, 9, 13);
+  const { segs, lanes } = L.layoutSpans([
+    { id: 'a', startDay: at(2026, 9, 18), endDay: at(2026, 9, 21) }, // Fri → next Mon: continues right
+    { id: 'b', startDay: at(2026, 9, 10), endDay: at(2026, 9, 14) }, // from last week: continues left
+    { id: 'c', startDay: at(2026, 9, 15), endDay: at(2026, 9, 16) }, // Tue–Wed: fits in b's lane
+    { id: 'd', startDay: at(2026, 9, 16), endDay: at(2026, 9, 18) }, // overlaps c → new lane
+    { id: 'z', startDay: at(2026, 9, 25), endDay: at(2026, 9, 26) }, // not this week
+  ], ws);
+  const by = Object.fromEntries(segs.map(s => [s.id, s]));
+  assert.deepEqual([by.b.col, by.b.span, by.b.contLeft, by.b.contRight], [0, 2, true, false]);
+  assert.deepEqual([by.a.col, by.a.span, by.a.contLeft, by.a.contRight], [5, 2, false, true]);
+  assert.equal(by.c.lane, by.b.lane);
+  assert.notEqual(by.d.lane, by.c.lane);
+  assert.equal(by.z, undefined);
+  assert.equal(lanes, 2);
+});
+
+test('Boilerexams matching: exact, lecture/lab section numbers, missing courses', () => {
+  const be = [{ abbreviation: 'MA', number: 16200 }, { abbreviation: 'CHM', number: 11500 }, { abbreviation: 'CS', number: 15900 }];
+  assert.equal(L.boilerexamsKey({ code: 'wl.202710.MA.16200.100', name: 'Fall 2026 - MA 16200' }, be), 'MA16200');
+  assert.equal(L.boilerexamsKey({ code: 'wl.202710.CHM.11510.001', name: 'CHM 11510' }, be), 'CHM11500'); // lecture section → course
+  assert.equal(L.boilerexamsKey({ code: 'wl.202710.ENGT.18200.SC1', name: 'ENGT 182' }, be), null);
+  assert.equal(L.boilerexamsKey({ code: 'club', name: 'Robotics Club' }, be), null);
+  assert.equal(L.boilerexamsKey({ code: 'x', name: 'Fall 2026 CS 15900 - Merge' }, be), 'CS15900'); // from the name
+  assert.equal(L.boilerexamsUrl('MA16200'), 'https://boilerexams.com/courses/MA16200/exams');
+});
+
 test('Windows notification switch is read from reg output', async () => {
   const { parseRegDword } = await import('./toast.mjs');
   assert.equal(parseRegDword('HKEY_CURRENT_USER\\x\r\n    ToastEnabled    REG_DWORD    0x0\r\n', 'ToastEnabled'), '0');
