@@ -65,7 +65,7 @@ When it's done, bookmark **http://localhost:4321**.
 |---|---|
 | Mark something done | Tick its checkbox (untick to undo) |
 | See details / instructions | Click the item |
-| Add your own notes to an assignment or exam | Click it and type in **My notes**. Markdown works (**bold**, lists, `- [ ]` checklists, links). Saves automatically; 📝 marks items with notes |
+| Add your own notes to an assignment or exam | Click it and type in **My notes**. Markdown works (**bold**, lists, `- [ ]` checklists, links). Saves automatically; items with notes show a “note” tag |
 | Add your own task | **+ Add task**, press **N**, or click an empty hour in Day view. Add an **End date** for something that spans days (e.g. Sat–Sun). Tick **This is an exam** for exams. |
 | Edit or delete your task | Click it |
 | Jump to today | **Today**, or press **T** |
@@ -75,11 +75,14 @@ When it's done, bookmark **http://localhost:4321**.
 | Notifications on/off, or a test | **⚙ Settings → Notifications** |
 | Turn optional features on or off | **⚙ Settings → Features** |
 | Show Google Calendar events (optional) | **⚙ Settings → Features → Google Calendar**, see below |
+| Put events from announcements on the calendar (optional) | **⚙ Settings → Features → Smart Announcements**, see below |
 | Update right now | **↻ Refresh** (about 2 minutes) |
 
 **Colors:** each course has its own color. Urgency always appears as a labeled badge: red **OVERDUE**, orange **TODAY**, yellow **TOMORROW**. **Gold = exam.** A dashed outline on the calendar means "**opens** at this time".
 
 **Google Calendar (optional, off by default):** shows events from the Google calendars you pick next to your Brightspace work, outlined (◷) so they never look like assignments. **All · Brightspace · Google** above the calendar switches between them. You can create, edit and delete events on calendars where you turn on **Allow edits**, and send an assignment or exam to Google from its details. It needs [Claude Code](https://claude.com/claude-code) signed in to a Claude account with the **Google Calendar connector** connected (claude.ai → Settings → Connectors). It syncs every 6 hours and on **Sync now**, using a small amount of your Claude usage (about $0.02–0.10 per sync on the cheapest model). Your events pass through Claude; nothing else leaves your PC.
+
+**Smart Announcements (optional, off by default):** reads your announcements from the last 2 weeks, and new ones as they arrive, and finds dated events: review sessions, help rooms, exams, deadlines (including ones not in Brightspace, like a lab's pre-lab), class changes. Events from your classes that it is sure about go straight on the calendar, marked ✦. Optional events (career fairs, workshops, club and program events) and anything missing a time or place wait in **Found in announcements** above your to-do list, where you **Accept**, **Edit**, or **Decline** them. Anything it adds can be removed from its details. Like Google Calendar, it needs [Claude Code](https://claude.com/claude-code) signed in; a scan of 2 weeks of announcements costs about $0.03–0.06 of Claude usage, new ones a cent or two. The announcement text is sent to Claude with no tools, so it can only suggest events, and each suggestion is checked against the announcement before it is used.
 
 **Study on Boilerexams:** exams in courses that [Boilerexams](https://boilerexams.com/courses) covers get a gold **Study on Boilerexams** button in their details, linking to that course's practice exams. It's checked automatically, including for new exams.
 

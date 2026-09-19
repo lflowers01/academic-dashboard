@@ -65,9 +65,9 @@ async function run({ prompt, tools, maxTurns }) {
   // with an npm-installed claude.cmd the command line passes through cmd.exe, where & | ^ would be special.
   const args = [...cmd.slice(1), '-p', '--model', MODEL, '--output-format', 'stream-json', '--verbose',
     '--max-turns', String(maxTurns), '--allowedTools', ['ToolSearch', ...tools.map(t => T + t)].join(','),
-    '--settings', '{"disableAllHooks":true}', '--disable-slash-commands'];
+    '--settings', '{"disableAllHooks":true,"alwaysThinkingEnabled":false}', '--disable-slash-commands'];
   return new Promise((resolve, reject) => {
-    const child = spawn(cmd[0], args, { cwd: CWD, env: { ...process.env, MAX_MCP_OUTPUT_TOKENS: '200000' }, // a full page (250 events) is ~85k tokens; the default 25k cap refuses it
+    const child = spawn(cmd[0], args, { cwd: CWD, env: { ...process.env, MAX_MCP_OUTPUT_TOKENS: '200000', MAX_THINKING_TOKENS: '0' }, // a full page (250 events) is ~85k tokens; the default 25k cap refuses it
     windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
     child.stdin.on('error', () => {}); // it may exit before reading
     child.stdin.end(prompt);

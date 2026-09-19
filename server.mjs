@@ -5,11 +5,13 @@ import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { buildItems, refreshDue, nextSlot, shortName, currentTerm, viewModel, digestItems, digestMessage, digestLink, boilerexamsKey, FEATURES } from './logic.mjs';
 import { createGcal } from './gcal-routes.mjs';
+import { createSmart } from './smart-ann.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURE = process.argv.includes('--fixture');
 // Demo mode: Google Calendar talks to a fake Claude so it works offline with made-up calendars.
 if (FIXTURE && !process.env.DASH_GCAL_CMD) process.env.DASH_GCAL_CMD = JSON.stringify([process.execPath, path.join(ROOT, 'fixtures', 'fake-claude.mjs')]);
+if (FIXTURE && !process.env.DASH_SMART_CMD) process.env.DASH_SMART_CMD = JSON.stringify([process.execPath, path.join(ROOT, 'fixtures', 'fake-smart.mjs')]); // demo's fake announcement reader
 // DASH_PORT / DASH_DATA exist for tests and for anyone whose port 4321 is taken.
 const PORT = Number(process.env.DASH_PORT) || 4321;
 const DATA = process.env.DASH_DATA ? path.resolve(process.env.DASH_DATA) : path.join(ROOT, FIXTURE ? 'data-demo' : 'data'); // demo never touches real data
@@ -70,6 +72,14 @@ function loadFixture() {
     else if (/^(dueDate|startDate|endDate|date|createdDate)$/.test(k) && v) o[k] = new Date(Date.parse(v) + shift).toISOString();
   } };
   walk(raw);
+  // dates written in announcement text ("Wednesday, September 23") move with the data, or the demo drifts into the past
+  const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const year = new Date(raw.anchor).getFullYear();
+  const DATE_RE = new RegExp(`\\b((?:Mon|Tues|Wednes|Thurs|Fri|Satur|Sun)day, )?(${MONTHS.join('|')}) (\\d{1,2})\\b`, 'g');
+  const retext = t => String(t || '').replace(DATE_RE, (m, weekday, mon, day) =>
+    new Date(new Date(year, MONTHS.indexOf(mon), +day, 12).getTime() + shift)
+      .toLocaleDateString('en-US', weekday ? { weekday: 'long', month: 'long', day: 'numeric' } : { month: 'long', day: 'numeric' }));
+  for (const x of raw.announcements || []) { x.title = retext(x.title); x.body = retext(x.body); }
   return { raw, refreshedAt: new Date().toISOString(), firstSeen: {}, failedCourses: [] };
 }
 let cache = FIXTURE ? loadFixture() : readJson('cache.json', null);
@@ -119,8 +129,12 @@ const gcal = createGcal({ state, readJson, writeJson, log, itemsOf: () => itemsO
 
 // ---------- view helpers ----------
 const coursesOf = raw => (raw?.courses || []).map(c => ({ id: c.id, name: c.name, code: c.code, short: shortName(c) }));
+// ---------- Smart Announcements (optional feature, smart-ann.mjs) ----------
+const smart = createSmart({ state, readJson, writeJson, log, announcements: () => cache?.raw?.announcements || [], courses: () => coursesOf(cache?.raw), itemsOf: () => brightspaceItems() });
+
+const brightspaceItems = () => buildItems(cache?.raw || {});
 function itemsOf() {
-  return buildItems(cache?.raw || {}).map(i => ({ ...i, firstSeen: cache?.firstSeen?.[i.id] }));
+  return [...brightspaceItems(), ...smart.items()].map(i => ({ ...i, firstSeen: cache?.firstSeen?.[i.id] }));
 }
 
 // ---------- notifications ----------
@@ -166,7 +180,7 @@ async function doRefresh() {
     }
     cache = { raw, refreshedAt: now, firstSeen, failedCourses };
     writeJson('cache.json', cache);
-    pruneState(items, raw.announcements || []);
+    pruneState([...items, ...smart.items()], raw.announcements || []); // found events keep their checkmarks too
     Object.assign(meta, { lastError: null, paused: false, retryIndex: 0, nextRetryAt: null });
     log(`refresh ok: ${items.length} items, ${failedCourses.length} course(s) failed`);
     // A new exam appeared → check Boilerexams now, not in up to 6 hours.
@@ -241,6 +255,7 @@ function payload() {
     // course id → Boilerexams key, for courses that exist there
     boilerexams: Object.fromEntries(courses.map(c => [c.id, boilerexamsKey(c, boilerexams.courses)]).filter(([, k]) => k)),
     gcal: gcal.payload(), // null unless the Google Calendar feature is on
+    smart: smart.payload(), // null unless Smart Announcements is on
   };
 }
 
@@ -328,6 +343,7 @@ const server = http.createServer(async (req, res) => {
       if (Array.isArray(b.seenAnnouncements)) state.seenAnnouncements = [...new Set([...state.seenAnnouncements, ...b.seenAnnouncements])];
       if (typeof b.notifications === 'boolean') state.notifications = b.notifications;
       for (const [k, v] of Object.entries(b.features || {})) if (FEATURES.some(f => f.id === k) && typeof v === 'boolean') state.features[k] = v; // unknown ids ignored
+      if (b.features) smart.tick(); // switching Smart Announcements on starts its first scan now, not at the next tick
       writeJson('state.json', state);
       return send(res, 200, state);
     }
@@ -346,6 +362,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (await gcal.handle(req, res, p, { readBody, send })) return;
+    if (await smart.handle(req, res, p, { readBody, send })) return;
 
     if (p === '/api/signin' && req.method === 'POST') {
       const { openSignInWindow } = await import('./brightspace.mjs');
@@ -376,5 +393,6 @@ server.listen(PORT, '127.0.0.1', () => {
   refreshBoilerexams('start-up');
   setInterval(checkNotifyBlock, 5 * 60_000);
   gcal.tick(); setInterval(() => gcal.tick(), 60_000); // Google Calendar sync schedule (no-op while the feature is off)
+  smart.tick(); setInterval(() => smart.tick(), 60_000); // scans new announcements (no-op while Smart Announcements is off)
   if (!FIXTURE) { tick(); setInterval(tick, 60_000); }
 });

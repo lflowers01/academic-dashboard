@@ -540,6 +540,51 @@
    "date": "2026-09-21T16:00:00.000Z",
    "startDate": "2026-09-21T16:00:00.000Z",
    "createdBy": "Unknown"
+  },
+  {
+   "id": 6,
+   "courseId": 102,
+   "title": "SI review session for Exam 1",
+   "body": "<p>Supplemental Instruction will hold an Exam 1 review session on Tuesday, September 22 from 7:00-9:00 PM in WALC 1055. Bring your questions!</p>",
+   "date": "2026-09-17T14:00:00.000Z",
+   "startDate": "2026-09-17T14:00:00.000Z",
+   "createdBy": "Unknown"
+  },
+  {
+   "id": 7,
+   "courseId": 104,
+   "title": "Industrial Roundtable",
+   "body": "<p>The Industrial Roundtable career fair is on Wednesday, September 23 from 9:00 AM-3:00 PM. Bring copies of your resume.</p>",
+   "date": "2026-09-17T13:00:00.000Z",
+   "startDate": "2026-09-17T13:00:00.000Z",
+   "createdBy": "Unknown"
+  },
+  {
+   "id": 8,
+   "courseId": 105,
+   "title": "Makeup lab",
+   "body": "<p>The makeup lab session will be held on Friday, September 25. The room and time will be posted soon.</p>",
+   "date": "2026-09-17T12:00:00.000Z",
+   "startDate": "2026-09-17T12:00:00.000Z",
+   "createdBy": "Unknown"
+  },
+  {
+   "id": 9,
+   "courseId": 105,
+   "title": "Project 1 reminder",
+   "body": "<p>Project 1 is due Wednesday, September 30 at 11:59 PM. Start early!</p>",
+   "date": "2026-09-17T11:00:00.000Z",
+   "startDate": "2026-09-17T11:00:00.000Z",
+   "createdBy": "Unknown"
+  },
+  {
+   "id": 10,
+   "courseId": 203,
+   "title": "Wellness check-in",
+   "body": "<p>The wellness check-in survey is due Monday, September 28 at 5:00 PM.</p>",
+   "date": "2026-09-17T10:00:00.000Z",
+   "startDate": "2026-09-17T10:00:00.000Z",
+   "createdBy": "Unknown"
   }
  ]
 }

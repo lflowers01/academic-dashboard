@@ -177,7 +177,7 @@ export function tasksToItems(tasks) {
 // A manual toggle (true or false) always wins. Announced exams count as done once they're over.
 export function isDone(item, doneMap = {}, now = new Date()) {
   if (typeof doneMap[item.id] === 'boolean') return doneMap[item.id];
-  if (item.kind === 'exam' || (item.kind === 'task' && item.exam)) return new Date(item.end || item.due) < new Date(now);
+  if (item.kind === 'exam' || (item.kind === 'task' && item.exam) || (item.kind === 'event' && item.eventKind !== 'deadline')) return new Date(item.end || item.due) < new Date(now);
   return item.submitted || item.graded;
 }
 
@@ -436,6 +436,7 @@ export const sundayOf = d => { d = startOfDay(d); return addDays(d, -d.getDay())
 export const GCAL_WINDOW = { back: 7, ahead: 42 }; // days around today that a sync reads
 export const FEATURES = [
   { id: 'googleCalendar', name: 'Google Calendar', description: `See and manage events from Google calendars you choose, next to your Brightspace work. Syncs events from ${GCAL_WINDOW.back / 7} week back to ${GCAL_WINDOW.ahead / 7} weeks ahead; other months load when you ask. Uses the Google Calendar connector in Claude (Claude Code required).` },
+  { id: 'smartAnnouncements', name: 'Smart Announcements', description: 'Finds dated events in new announcements (review sessions, help rooms, exams, deadlines, class changes). Class events it is sure about are added to your calendar; the rest wait for you to accept, edit or decline. Uses Claude (Claude Code required).' },
 ];
 export const featureOn = (state, id) => state?.features?.[id] === true && FEATURES.some(f => f.id === id);
 
@@ -519,4 +520,65 @@ export function linkify(text) {
   }
   if (last < text.length) out.push({ text: text.slice(last) });
   return out;
+}
+
+// ---- Smart Announcements (optional feature; see spec-smart-announcements.md) ----
+export const SMART_DAYS = 14;          // announcements posted this recently are scanned
+export const SMART_KINDS = ['exam', 'review', 'help', 'deadline', 'class-change', 'optional'];
+// Plain text of an announcement for the model (and for checking its quotes).
+export const annText = a => `${a.title || ''}\n${htmlToText(a.body)}`.slice(0, 4000);
+const squash = t => String(t || '').toLowerCase().replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/\s+/g, ' ').trim();
+const HM = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+// One suggestion from the model → a checked event, or null. The model read untrusted text, so nothing it says is
+// trusted: the quote must be in the announcement, the date must be real and near the posting, times well-formed.
+export function verifyFound(ev, ann, now = new Date()) {
+  if (!ev || !ann || !SMART_KINDS.includes(ev.kind)) return null;
+  const quote = squash(ev.quote);
+  if (quote.length < 8 || !squash(annText(ann)).includes(quote)) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ev.date || '')) return null;
+  const day = dateOnly(ev.date);
+  if (dayKey(day) !== ev.date) return null; // e.g. 2026-02-30
+  const posted = startOfDay(ann.date || ann.createdDate || now);
+  if (day < addDays(posted, -2) || day > addDays(posted, 300)) return null;
+  const start = HM.test(ev.start || '') ? ev.start : null;
+  const end = start && HM.test(ev.end || '') && ev.end > start ? ev.end : null;
+  const at = hm => { const d = new Date(day); const [h, m] = hm.split(':').map(Number); d.setHours(h, m, 0, 0); return d; };
+  const due = start ? at(start) : (() => { const d = new Date(day); d.setHours(23, 59, 0, 0); return d; })();
+  if ((end ? at(end) : due) < new Date(now)) return null; // already over
+  const missing = [...new Set((Array.isArray(ev.missing) ? ev.missing : []).map(String).filter(m => /^(date|time|start|end|location|place)$/i.test(m)))];
+  return {
+    annId: ann.id, courseId: ann.courseId, kind: ev.kind,
+    title: String(ev.title || ann.title || 'Event').replace(/\s+/g, ' ').trim().slice(0, 120),
+    date: ev.date, start, end, allDay: !start, location: String(ev.location || '').trim().slice(0, 120),
+    quote: String(ev.quote).trim().slice(0, 500), missing,
+    sure: ev.confidence === 'high' && !missing.length && ev.kind !== 'optional',
+  };
+}
+
+// Same event found twice (a reminder re-announcing it, or the exam detector already has it)? `words` is the
+// Google-merge helper above (drops course codes and filler words).
+// Timed events at the same course/day/minute are rarely two things, so half the words in common is enough; deadlines
+// pile up at 11:59 PM ("PreLab Quiz – How Can We…" vs "Procedure – How Can We…"), so they must nearly match.
+// `lenient`: comparing with a real Brightspace item, whose name announcements paraphrase.
+export function sameEvent(a, b, lenient = false) {
+  if (a.courseId !== b.courseId || a.date !== b.date) return false;
+  if (a.start && b.start && a.start !== b.start) return false;
+  const x = words(a.title), y = words(b.title);
+  const shared = [...x].filter(w => y.has(w)).length;
+  if (lenient || (a.start && b.start && a.start !== '23:59')) return shared / Math.max(1, Math.min(x.size, y.size)) >= 0.5;
+  return shared / Math.max(1, x.size, y.size) >= 0.75;
+}
+
+// Added / accepted found events → dashboard items (kind 'event').
+export function smartItems(found) {
+  return found.filter(f => f.status === 'added').map(f => {
+    const at = hm => { const d = dateOnly(f.date); if (hm) { const [h, m] = hm.split(':').map(Number); d.setHours(h, m, 0, 0); } else d.setHours(23, 59, 0, 0); return d; };
+    return {
+      id: f.id, courseId: f.courseId, kind: 'event', eventKind: f.kind, exam: f.kind === 'exam', title: f.title,
+      due: at(f.start).toISOString(), end: f.end ? at(f.end).toISOString() : null, allDay: !f.start, start: null,
+      location: f.location || '', points: null, timeLimit: null, url: null, submitted: false, graded: false,
+      instructions: `From the announcement:\n“${f.quote}”`, sourceAnnouncement: f.annId,
+    };
+  });
 }

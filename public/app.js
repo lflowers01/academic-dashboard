@@ -31,7 +31,10 @@ function fmtAgo(d) {
   if (m < 1440) return `${Math.round(m / 60)} h ago`;
   return `${Math.round(m / 1440)} d ago`;
 }
-const dueLabel = i => (i.allDay ? 'all day' : i.end && i.kind === 'exam' ? `${fmtTime(i.due)}–${fmtTime(i.end)}` : fmtTime(i.due));
+// Found in an announcement: announced exams, and events from the Smart Announcements feature. They have a start–end, not a due date.
+const announced = i => i.kind === 'exam' || i.kind === 'event';
+const EVENT_KIND = { exam: 'Exam', review: 'Review session', help: 'Help session', deadline: 'Deadline', 'class-change': 'Class change', optional: 'Event' };
+const dueLabel = i => (i.allDay ? 'all day' : i.end && announced(i) ? `${fmtTime(i.due)}–${fmtTime(i.end)}` : fmtTime(i.due));
 const rangeLabel = i => `${fmtDay(i.rangeStart)} – ${fmtDay(i.due)}${i.allDay ? '' : ' ' + fmtTime(i.due)}`;
 
 // ---------- model ----------
@@ -162,7 +165,8 @@ function renderTabs() {
 // ----- to-do -----
 function itemRow(i, { showDay = false } = {}) {
   const badges = [];
-  if (i.exam) badges.push(h('span', { class: 'badge b-exam' }, i.kind === 'exam' ? 'EXAM · from announcement' : 'EXAM'));
+  if (i.exam) badges.push(h('span', { class: 'badge b-exam' }, announced(i) ? 'EXAM · from announcement' : 'EXAM'));
+  else if (i.kind === 'event') badges.push(h('span', { class: 'badge b-found', title: 'Found in an announcement' }, `✦ ${EVENT_KIND[i.eventKind] || 'Event'} · from announcement`));
   if (i.rangeStart && !i.done && i.st !== 'overdue') { if (i.st !== 'today') badges.push(h('span', { class: 'badge b-info' }, rangeLabel(i))); } // under Today, a running range needs no badge
   else if (i.st === 'overdue') badges.push(h('span', { class: 'badge b-overdue' }, `⚠ OVERDUE · ${fmtDay(i.due)}`));
   else if (i.st === 'today') badges.push(h('span', { class: 'badge b-today' }, `TODAY ${dueLabel(i)}`));
@@ -173,7 +177,7 @@ function itemRow(i, { showDay = false } = {}) {
   if (i.points) badges.push(h('span', {}, `${i.points} pts`));
   if (i.isNew && !i.done) badges.push(h('span', { class: 'badge b-new' }, 'NEW'));
   if (i.done && (i.submitted || i.graded) && typeof data.state.done[i.id] !== 'boolean') badges.push(h('span', {}, i.submitted ? '✓ submitted' : '✓ graded'));
-  if (noteOf(i)) badges.push(h('span', { class: 'note-mark', title: noteOf(i) }, '📝 note'));
+  if (noteOf(i)) badges.push(h('span', { class: 'note-mark', title: noteOf(i) }, 'note'));
   for (const f of hooks.rowBadges) badges.push(...(f(i, lastModel) || []));
 
   return h('div', { class: `item${i.done ? ' done' : ''}${i.exam ? ' exam' : ''}`, 'data-id': i.id },
@@ -346,7 +350,7 @@ function renderDay(m) {
       if (i.rangeStart) { if (itemDays(i).includes(k)) allDay.push(chipFor({ i, kind: 'due' })); }
       else if (dayKey(i.due) === k) {
         if (i.allDay) allDay.push(chipFor({ i, kind: 'due' }));
-        else if (i.kind === 'exam' && i.end) blocks.push({ id: i.id, start: i.due, end: i.end, node: () => chipFor({ i, kind: 'due' }) });
+        else if (announced(i) && i.end) blocks.push({ id: i.id, start: i.due, end: i.end, node: () => chipFor({ i, kind: 'due' }) });
         else pins.push({ at: new Date(i.due), node: chipFor({ i, kind: 'due' }) });
       }
     }
@@ -409,14 +413,14 @@ function spanChip(s) {
     type: 'button',
     class: ['chip', 'range', 'span', i.exam && 'exam', i.done && 'done', s.contLeft && 'cont-left', s.contRight && 'cont-right', !i.done && (i.st === 'today' || i.st === 'overdue') && 'urgent'].filter(Boolean).join(' '),
     style: { '--c': colorOf(i), 'grid-column': `${s.col + 1} / span ${s.span}`, 'grid-row': String(s.lane + 2) },
-    title: `${tagText(i)} · ${i.title} · ${rangeLabel(i)}${noteOf(i) ? '\n📝 ' + noteOf(i) : ''}`,
+    title: `${tagText(i)} · ${i.title} · ${rangeLabel(i)}${noteOf(i) ? '\nNote: ' + noteOf(i) : ''}`,
     onclick: e => { e.stopPropagation(); openItem(i); },
   }, s.contLeft ? h('span', { class: 'cont', 'aria-hidden': 'true' }, '◂ ') : null,
   i.exam ? h('span', { class: 'x' }, 'EXAM') : null,
   h('span', { class: 't' }, tagText(i)), i.title,
   !s.contRight && time ? h('span', { class: 'muted' }, ` · due ${compactTime(time)}`) : null,
   s.contRight ? h('span', { class: 'cont', 'aria-hidden': 'true' }, ' ▸') : null,
-  noteOf(i) ? h('span', { class: 'chip-note' }, ' 📝') : null);
+  null);
 }
 
 function chipFor({ i, kind }) {
@@ -425,12 +429,13 @@ function chipFor({ i, kind }) {
   const time = kind === 'opens' ? fmtTime(i.start) : (i.allDay ? '' : dueLabel(i));
   return h('button', {
     type: 'button', class: ['chip', kind === 'opens' && 'opens', kind === 'due' && i.exam && 'exam', i.rangeStart && 'range', i.done && kind === 'due' && 'done', urgent && 'urgent'].filter(Boolean).join(' '),
-    style: { '--c': colorOf(i) }, title: `${tagText(i)} · ${label}${time ? ' · ' + time : ''}${noteOf(i) ? '\n📝 ' + noteOf(i) : ''}`,
+    style: { '--c': colorOf(i) }, title: `${tagText(i)} · ${label}${time ? ' · ' + time : ''}${noteOf(i) ? '\nNote: ' + noteOf(i) : ''}`,
     onclick: e => { e.stopPropagation(); openItem(i); },
   }, kind === 'due' && i.exam ? h('span', { class: 'x' }, 'EXAM') : null,
+  i.kind === 'event' && !i.exam ? h('span', { class: 'found-mark', title: 'Found in an announcement' }, '✦ ') : null,
   view.mode !== 'month' ? h('span', { class: 't' }, tagText(i)) : null, // month cells are narrow: color bar + legend identify the course
   view.mode === 'month' && time ? h('span', { class: 't' }, compactTime(time)) : null,
-  label, view.mode !== 'month' && time ? ` · ${time}` : '', kind === 'due' && noteOf(i) ? h('span', { class: 'chip-note', 'aria-label': 'has a note' }, ' 📝') : null);
+  label, view.mode !== 'month' && time ? ` · ${time}` : '');
 }
 
 // Legend badges toggle a course (or Google calendar) on the calendar view only; the to-do list is unaffected.
@@ -452,13 +457,14 @@ function openItem(i) {
   if (i.kind === 'task') return openTaskForm(data.tasks.find(t => t.id === i.id));
   const rows = [
     ['Course', courseOf(i)?.name || ''],
-    ['Type', i.kind === 'exam' ? 'Exam (found in an announcement)' : `${i.kind === 'quiz' ? 'Quiz' : 'Assignment'}${i.exam ? ' · exam' : ''}`],
-    i.due && [i.kind === 'exam' ? 'When' : 'Due', i.kind === 'exam' ? `${fmtFull(i.due)}${i.end ? ' – ' + fmtTime(i.end) : ''}` : fmtFull(i.due)],
+    ['Type', i.kind === 'exam' ? 'Exam (found in an announcement)' : i.kind === 'event' ? `${EVENT_KIND[i.eventKind] || 'Event'} (found in an announcement)` : `${i.kind === 'quiz' ? 'Quiz' : 'Assignment'}${i.exam ? ' · exam' : ''}`],
+    i.due && [announced(i) && i.eventKind !== 'deadline' ? 'When' : 'Due', announced(i) ? `${i.allDay ? fmtDay(i.due) + ' · all day' : fmtFull(i.due)}${i.end ? ' – ' + fmtTime(i.end) : ''}` : fmtFull(i.due)],
+    i.location && ['Where', i.location],
     i.start && ['Opens', fmtFull(i.start)],
-    i.kind !== 'exam' && i.end && i.due && new Date(i.end) > new Date(i.due) && ['Late until', fmtFull(i.end)],
+    !announced(i) && i.end && i.due && new Date(i.end) > new Date(i.due) && ['Late until', fmtFull(i.end)],
     i.points && ['Points', i.points],
     i.timeLimit && ['Time limit', `${i.timeLimit} min`],
-    ['Status', i.done ? (i.submitted ? 'Submitted' : i.graded ? 'Graded' : i.kind === 'exam' && typeof data.state.done[i.id] !== 'boolean' ? 'Over' : 'Marked done') : i.st === 'overdue' ? 'Overdue' : 'Not done'],
+    ['Status', i.done ? (i.submitted ? 'Submitted' : i.graded ? 'Graded' : announced(i) && typeof data.state.done[i.id] !== 'boolean' ? 'Over' : 'Marked done') : i.st === 'overdue' ? 'Overdue' : 'Not done'],
   ].filter(Boolean);
   $('#itemBody').replaceChildren(h('div', { class: 'detail' },
     h('h2', {}, h('span', { class: 'tag', style: { '--c': colorOf(i) } }, tagText(i)), ' ', i.title),
@@ -468,7 +474,7 @@ function openItem(i) {
     studyButton(i),
     ...hooks.itemDetails.flatMap(f => f(i, lastModel) || []),
     h('p', { class: 'links' }, ...brightspaceLinks(i),
-      i.kind === 'exam' ? h('a', { href: announcementUrl(brightspaceOrigin(data.items), i.courseId, i.sourceAnnouncement), target: '_blank', rel: 'noopener noreferrer' }, 'Open the announcement in Brightspace ↗') : null, ' ',
+      announced(i) ? h('a', { href: announcementUrl(brightspaceOrigin(data.items), i.courseId, i.sourceAnnouncement), target: '_blank', rel: 'noopener noreferrer' }, 'Open the announcement in Brightspace ↗') : null, ' ',
       h('label', { style: { display: 'inline-flex', gap: '6px', 'align-items': 'center' } },
         h('input', { type: 'checkbox', checked: i.done, onchange: e => toggleDone(i, e.target.checked) }), 'Done'))));
   $('#dlgItem').showModal();
@@ -633,7 +639,7 @@ function openSettings(sec = settingsSection) {
 function renderFeatures() {
   $('#featureList').replaceChildren(...(FEATURES.length ? FEATURES.map(f => h('div', { class: 'feature-row' },
     h('label', { class: 'switch-row' },
-      h('input', { type: 'checkbox', role: 'switch', checked: featureOn(data.state, f.id), onchange: e => patchState({ features: { [f.id]: e.target.checked } }).then(renderFeatures).catch(() => {}) }),
+      h('input', { type: 'checkbox', role: 'switch', checked: featureOn(data.state, f.id), onchange: e => patchState({ features: { [f.id]: e.target.checked } }).then(load).then(renderFeatures).catch(() => {}) }), // load: the feature's own data (e.g. data.smart) only comes with a fresh fetch
       h('span', {}, h('strong', {}, f.name), h('br'), h('small', { class: 'muted' }, f.description))))) : [h('p', { class: 'muted' }, 'No optional features yet.')]));
 }
 

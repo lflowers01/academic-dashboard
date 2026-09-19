@@ -247,6 +247,7 @@ dialog.settings { width: min(760px, calc(100vw - 32px)); min-height: min(560px, 
 .gadd { border-color: #8ab4f8; }
 .cal-extras { display: inline-flex; gap: 8px; align-items: center; margin-left: 12px; flex-wrap: wrap; }
 .src-filter button { padding: 4px 10px; font-size: 13px; }
+.badge.b-found { border: 1px solid #cfb991; color: #cfb991; }
 .gnotice { font-size: 12px; padding: 3px 8px; border-radius: 6px; border: 1px solid var(--line); display: inline-flex; gap: 6px; align-items: center; max-width: 420px; }
 .gnotice.ok { border-color: var(--green); color: var(--green); }
 .gnotice.busy { color: var(--muted); }
@@ -308,3 +309,13 @@ dialog.chooser { width: min(420px, calc(100vw - 32px)); }
 .credits a { color: var(--muted); text-decoration: none; display: inline-flex; align-items: center; gap: 8px; }
 .credits a:hover { color: var(--text); text-decoration: underline; }
 .credits img { height: 18px; width: auto; }
+
+/* Smart Announcements */
+.found-mark { color: #cfb991; }
+.smart-card { border-color: #cfb991; }
+.smart-list { display: grid; }
+.smart-row { display: flex; gap: 8px; justify-content: space-between; align-items: flex-start; padding: 8px 10px; }
+.smart-row + .smart-row { border-top: 1px solid var(--line); }
+.smart-meta { font-size: 12px; margin-top: 2px; }
+.smart-actions { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
+.smart-actions button { font-size: 12px; padding: 3px 8px; }
