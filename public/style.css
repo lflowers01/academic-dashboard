@@ -170,7 +170,9 @@ dialog input, dialog select, dialog textarea { display: block; width: 100%; marg
 .chip.exam.urgent::before { color: #000; }
 .chip.exam.done { opacity: .45; }
 .badge.b-exam { color: #000; background: #cfb991; border-color: #cfb991; }
-.item.exam { box-shadow: inset 3px 0 0 #cfb991; }
+/* exams: a straight gold line in the gutter left of the row (not inside its rounded corner, next to the checkbox) */
+.item.exam { position: relative; }
+.item.exam::before { content: ""; position: absolute; left: -7px; top: 5px; bottom: 5px; width: 3px; background: #cfb991; }
 dialog label.check { display: flex; gap: 8px; align-items: center; font-weight: 600; }
 dialog label.check input { width: auto; margin: 0; display: inline; }
 
