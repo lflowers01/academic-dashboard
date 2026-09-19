@@ -22,9 +22,9 @@ pointsDenominator, weightedNumerator, weightedDenominator, comments, lastModifie
 - **Zeros are ambiguous:** several `0/x` rows per class. Some are real zeros,
   some are "not graded yet" or "not counted", and the row alone can't say which. Averaging them in is a big reason a
   student's Brightspace number feels wrong.
-- **Syllabi use two different schemes:** a calculus class is *weighted categories* (Quizzes 1%, Workshop Notes 15%, Midterms
-  14/15/15%, Final 15%, and a 25% row whose label is lost in text extraction); a chemistry and a speech class are *total points*
-  ("Total score ≥ 93% → A"). A plain points average is wrong for a calculus class; a plain average of percentages is wrong for chemistry.
+- **Syllabi use two different schemes:** a calculus class uses *weighted categories* (the percentages sit in a table whose
+  rows lose their labels in text extraction); a chemistry and a speech class use *total points*. A plain points average is
+  wrong for the first kind; a plain average of percentages is wrong for the second.
 - **Letter scales differ** between classes (e.g. an A from 92% in one class and 93% in another; one class has A+), so "what do I need
   for a B" must use the course's own scale, with a common default when unknown.
 
@@ -35,8 +35,8 @@ pointsDenominator, weightedNumerator, weightedDenominator, comments, lastModifie
   Information" / "Syllabus" modules. `download_file` works for them. Formats: PDF, DOCX, HTML.
 - Students also download the **Simple Syllabus PDFs** themselves (the student whose data was studied keeps a folder of them). Those are the most
   complete source for grading schemes and letter scales, so the page should accept dropped files too.
-- Text extraction: **unpdf** (2 MB, no dependencies, Node ≥ 22) reads all 8 of those PDFs in < 0.1 s each (the 69-page
-  calculus syllabus → 45k characters). DOCX: it's a zip; Windows' own .NET `ZipFile` (via PowerShell) reads `word/document.xml`
+- Text extraction: **unpdf** (2 MB, no dependencies, Node ≥ 22) reads all 8 of those PDFs in < 0.1 s each (a 69-page
+  syllabus → 45k characters). DOCX: it's a zip; Windows' own .NET `ZipFile` (via PowerShell) reads `word/document.xml`
   with no new dependency. HTML: the existing `htmlToText`. Tables come out scrambled (a percentage row can lose its label), so
   **a person must confirm weights**; Claude reads the text, the student approves the result.
 - Exam dates in syllabi are often "TBA" (finals) or live in a separate schedule; the scan must accept "no date".
@@ -172,6 +172,20 @@ honest about what's uncertain.
 - Rows with `pointsDenominator` 0 are ignored (they're placeholders). Per-row overrides (ignore / what-if) and schemes
   live in `state.grades` (the student's own data, saved like notes).
 - Default letter scale when the syllabus doesn't give one: Purdue's common 93/90/87/83/80/77/73/70/67/63/60.
+
+### As built (2026-09-19), and what the real gradebooks changed
+Looking at real rows showed *why* Brightspace's numbers feel wrong: **category total rows sit next to the items and
+count work not graded yet as 0.** A "Quizzes" total spreads the one graded quiz over the whole term; unstarted
+presentations show as "0/105" and "0/150"; a "Homework" row is the sum of the homework rows listed right after it and
+would be counted twice. A plain average came out far below the real grade (by 50+ points in two classes).
+- `markCategoryTotals` finds one total per category: a row whose points equal the sum of the other rows in its category
+  (and whose maximum is at least theirs), else one named like the category with no item number that is the biggest in it,
+  or an empty 0 with nothing else graded. Totals are left out by default (shown faded, "Brightspace category total"),
+  and can be counted back in. With the real schemes the results matched what the syllabi describe.
+- Row → category matching expands gradebook shorthand (HW, Rec, Lec, Qz, Attn, EC) and prefers more shared words.
+- Extra credit rows ("EC", "extra credit", "bonus") add to what was earned, never to what was possible.
+- The tab is a feature tab (`data-tab`); what-ifs are page-only; the target grade defaults to the next grade up.
+- Tests: `test-grades.mjs` (the three real gradebook shapes, anonymized), `test-e2e-grades.mjs`.
 
 ---
 

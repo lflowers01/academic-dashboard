@@ -343,3 +343,35 @@ dialog.chooser { width: min(420px, calc(100vw - 32px)); }
 .syl-drop { border: 1.5px dashed var(--line); border-radius: 10px; padding: 14px; margin: 12px 0; text-align: center; color: var(--muted); cursor: pointer; }
 .syl-drop:hover, .syl-drop.over { border-color: #cfb991; color: var(--text); }
 .syl-ask { margin: 6px 0; font-size: 13px; }
+
+/* Grades */
+#panelGrades { padding: 16px 20px; }
+.grades-note { max-width: 900px; font-size: 13px; }
+.grade-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; margin-top: 12px; }
+.grade-card { text-align: left; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: var(--panel); display: grid; gap: 6px; }
+.grade-card:hover { border-color: #6b6b6b; background: var(--panel); }
+.grade-big { font-size: 28px; font-weight: 800; display: flex; align-items: baseline; gap: 8px; }
+.grade-letter { font-size: 15px; font-weight: 800; border: 1.5px solid currentColor; border-radius: 6px; padding: 0 6px; }
+.grade-basis { font-size: 12px; }
+.grade-share { height: 5px; background: var(--panel-2); border-radius: 3px; overflow: hidden; }
+.grade-share-bar { height: 100%; background: #cfb991; }
+.grade-dlg { max-width: 760px; width: 92vw; }
+.grade-dlg-head h2 { display: flex; align-items: baseline; gap: 10px; margin-bottom: 2px; }
+.grade-scheme { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin: 10px 0; font-size: 13px; }
+.grade-scheme.suggest { border-color: #cfb991; }
+.grade-scheme-actions { display: flex; gap: 6px; margin-top: 8px; align-items: center; }
+.scheme-row { display: grid; grid-template-columns: 1fr 90px auto auto; gap: 6px; align-items: center; margin: 6px 0; }
+.scheme-foot { display: flex; gap: 10px; align-items: center; margin-top: 6px; }
+.grade-need { margin: 12px 0; font-size: 14px; }
+.grade-need select { margin: 0 4px; width: auto; display: inline-block; }
+.grade-cat h3 { font-size: 13px; margin: 14px 0 4px; }
+.grade-rows { width: 100%; border-collapse: collapse; font-size: 13px; }
+.grade-rows th, .grade-rows td { padding: 4px 6px; border-bottom: 1px solid var(--line); text-align: left; }
+.grade-rows .num { text-align: right; white-space: nowrap; }
+.grade-rows tr.off td:not(:first-child) { opacity: .45; }
+.grade-rows tr.tried td { font-style: italic; }
+.grade-rows input.whatif { width: 64px; display: inline-block; padding: 2px 6px; }
+.grade-rows select { width: auto; max-width: 220px; padding: 2px 6px; }
+.grade-rows td { vertical-align: middle; }
+.grade-rows td:first-child, .grade-rows th:first-child { width: 48px; text-align: center; }
+.scheme-row input { width: 100%; }

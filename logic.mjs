@@ -436,6 +436,7 @@ export const sundayOf = d => { d = startOfDay(d); return addDays(d, -d.getDay())
 export const GCAL_WINDOW = { back: 7, ahead: 42 }; // days around today that a sync reads
 export const FEATURES = [
   { id: 'googleCalendar', name: 'Google Calendar', description: `See and manage events from Google calendars you choose, next to your Brightspace work. Syncs events from ${GCAL_WINDOW.back / 7} week back to ${GCAL_WINDOW.ahead / 7} weeks ahead; other months load when you ask. Uses the Google Calendar connector in Claude (Claude Code required).` },
+  { id: 'grades', name: 'Grades', description: 'A Grades tab with each class\'s grade worked out the way its syllabus says (weights or points), what-ifs, and "what do I need on the final". Leaves out Brightspace\'s category totals, which count work not graded yet as 0. Works without Claude; Syllabus scan fills in the grading schemes.' },
   { id: 'syllabusScan', name: 'Syllabus scan', description: 'Reads each class\'s syllabus (from Brightspace, or files you add) and puts its exams and deadlines on your calendar, the same careful way Smart Announcements does. It also reads the grading scheme for the Grades tab. Uses Claude (Claude Code required).' },
   { id: 'smartAnnouncements', name: 'Smart Announcements', description: 'Finds dated events in new announcements (review sessions, help rooms, exams, deadlines, class changes). Class events it is sure about are added to your calendar; the rest wait for you to accept, edit or decline. Uses Claude (Claude Code required).' },
 ];
@@ -675,4 +676,120 @@ export function eventFields(b, f) {
   if (start === undefined || end === undefined) throw Object.assign(new Error('Times must look like 14:30.'), { status: 400 });
   if (end && (!start || end <= start)) throw Object.assign(new Error('The end must be after the start.'), { status: 400 });
   return { title, date, start, end, allDay: !start, location: String(b.location ?? f.location ?? '').trim().slice(0, 120), missing: [] };
+}
+
+// ---- Grades (optional feature; see spec-next-features.md §3) ----
+// Purdue's common cutoffs, used when a syllabus doesn't give its own scale.
+export const DEFAULT_SCALE = [['A', 93], ['A-', 90], ['B+', 87], ['B', 83], ['B-', 80], ['C+', 77], ['C', 73], ['C-', 70], ['D+', 67], ['D', 63], ['D-', 60]].map(([letter, min]) => ({ letter, min }));
+export const letterFor = (pct, scale) => (pct == null ? null : ((scale?.length ? scale : DEFAULT_SCALE).find(s => pct >= s.min - 1e-9)?.letter || 'F'));
+
+// Gradebook shorthand ("HW01", "Wk 2 REC", "Lec 3 EC", "Attn Qz") → the words a syllabus uses.
+const ABBR = { hw: 'homework', rec: 'recitation', lec: 'lecture', qz: 'quiz', attn: 'attendance', ec: 'extra', lab: 'lab', proj: 'project', pres: 'presentation', mt: 'midterm' };
+const gradeWords = t => new Set(String(t || '').toLowerCase().replace(/([a-z])(\d)/g, '$1 $2').replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter(w => w.length > 1 && !/^\d+$/.test(w))
+  .map(w => ABBR[w] || w).map(w => w.replace(/zzes$/, 'z').replace(/ies$/, 'y').replace(/(ss|sh|ch|x)es$/, '$1').replace(/([^s])s$/, '$1'))); // quizzes → quiz, exams → exam
+// Is this row named like the category itself ("Quizzes", "Chapter Quizzes - 114 F26", "Rec attendance") rather than one
+// item in it ("Quiz 1", "HW01_due_Sept_2", "Wk 3 REC")? Items carry a small number; category rows don't.
+const namesCategory = (rowName, compName) => {
+  const r = gradeWords(rowName), c = gradeWords(compName);
+  return [...c].filter(w => r.has(w)).length / Math.max(1, Math.min(c.size, r.size)) >= 0.5
+    && !/(^|\s)\d{1,2}(\s|$)/.test(String(rowName).replace(/[^A-Za-z0-9]+/g, ' '));
+};
+// Brightspace lists category totals next to the items ("Homework 27.5/50" = HW01+HW02+HW03, and counting the homework
+// not graded yet as 0; "Wellness Wisdom 0/95" before anything in it is graded). Counting them too double-counts and
+// drags the grade down, which is much of why Brightspace's number looks wrong. Mark at most one per category.
+function markCategoryTotals(list) {
+  for (const comp of new Set(list.map(r => r.component).filter(Boolean))) {
+    const rows = list.filter(r => r.component === comp);
+    const total = rows.find(r => { const others = rows.filter(o => o !== r); return others.length && Math.abs(others.reduce((s, o) => s + o.real, 0) - r.real) < 0.05 && r.possible >= others.reduce((s, o) => s + o.possible, 0) - 1e-9; })
+      || rows.find(r => { const others = rows.filter(o => o !== r); return namesCategory(r.name, comp) && (others.length ? r.possible >= Math.max(...others.map(o => o.possible)) : r.real === 0); });
+    if (total) total.summary = true;
+  }
+}
+// Which grading component a Brightspace row belongs to, by shared words ("Midterm Exam 1" → "Midterm Exam 1",
+// "WebAssign 3" → "WebAssign", "Exam 1" → "Exams"). null when nothing matches.
+export function guessComponent(rowName, components) {
+  const r = gradeWords(rowName);
+  let best = null, score = 0;
+  for (const c of components || []) {
+    const w = gradeWords(c.name);
+    const shared = [...w].filter(x => r.has(x)).length; // more words in common wins; then the closer fit
+    const s = shared ? shared + shared / Math.max(1, w.size) + (String(rowName).toLowerCase().includes(String(c.name).toLowerCase()) ? 1 : 0) : 0;
+    if (s > score) { best = c.name; score = s; }
+  }
+  return score > 0 ? best : null;
+}
+
+// rows: Brightspace grade rows ({ name, pointsNumerator, pointsDenominator }); cfg: { scheme: { type: 'weighted'|'points',
+// components: [{ name, value }], scale }, assign: { rowName: componentName }, ignore: { rowName: true } }; whatIf: { rowName: percent }.
+// → { pct, letter, basis, share (0..1 of the course already graded, when known), categories: [...], rows: [...] }
+export function gradeFor(rows, cfg = {}, whatIf = {}) {
+  const scheme = cfg.scheme && ['weighted', 'points'].includes(cfg.scheme.type) ? cfg.scheme : null;
+  const components = scheme?.components || [];
+  const list = (rows || []).filter(r => Number(r.pointsDenominator) > 0).map(r => {
+    const den = Number(r.pointsDenominator), tried = whatIf[r.name] != null && whatIf[r.name] !== '' && Number.isFinite(Number(whatIf[r.name]));
+    const earned = tried ? Number(whatIf[r.name]) / 100 * den : Number(r.pointsNumerator) || 0;
+    // extra credit adds to what you earned, never to what was possible
+    const extra = /(^|[^a-z])EC([^a-z]|$)|extra credit|bonus/i.test(r.name); // "Lec 3 EC", "(1 pt EC)" (not "Rec")
+    return { name: r.name, earned, possible: extra ? 0 : den, extra, real: Number(r.pointsNumerator) || 0, whatIf: tried, zero: !tried && !(Number(r.pointsNumerator) > 0),
+      ignored: !!cfg.ignore?.[r.name], component: scheme ? (cfg.assign?.[r.name] ?? guessComponent(r.name, components)) : null };
+  });
+  if (scheme) { markCategoryTotals(list); for (const r of list) if (r.summary && !cfg.include?.[r.name]) r.ignored = true; }
+  const counted = list.filter(r => !r.ignored);
+  const sum = (a, k) => a.reduce((s, r) => s + r[k], 0);
+  const scale = scheme?.scale?.length ? scheme.scale : DEFAULT_SCALE;
+  if (scheme?.type === 'weighted') {
+    const categories = components.map(c => {
+      const rs = counted.filter(r => r.component === c.name);
+      const possible = sum(rs, 'possible');
+      return { name: c.name, weight: c.value, earned: sum(rs, 'earned'), possible, pct: possible ? sum(rs, 'earned') / possible * 100 : null, rows: list.filter(r => r.component === c.name) };
+    });
+    const graded = categories.filter(c => c.pct != null);
+    const total = sum(categories, 'weight'), gw = sum(graded, 'weight');
+    const pct = gw ? graded.reduce((s, c) => s + c.weight * c.pct, 0) / gw : null;
+    return { pct, letter: letterFor(pct, scale), basis: 'weighted', share: total ? gw / total : null, categories, rows: list,
+      unassigned: list.filter(r => !r.component || !components.some(c => c.name === r.component)), scale, total };
+  }
+  const possible = sum(counted, 'possible'), pct = possible ? sum(counted, 'earned') / possible * 100 : null;
+  const coursePoints = scheme?.type === 'points' ? components.reduce((s, c) => s + c.value, 0) : 0;
+  return { pct, letter: letterFor(pct, scale), basis: scheme ? 'points' : 'simple', share: coursePoints ? Math.min(1, possible / coursePoints) : null,
+    categories: [], rows: list, unassigned: [], scale, total: coursePoints };
+}
+
+// What average on everything not graded yet gets the course to `target` percent? → { need, on } or null when unknown.
+// on: the name of the only category still ungraded (e.g. "Final Exam"), else null ("everything left").
+export function needFor(target, g) {
+  if (g.basis === 'weighted') {
+    const left = g.categories.filter(c => c.pct == null), leftWeight = left.reduce((s, c) => s + c.weight, 0);
+    if (!leftWeight) return null;
+    const have = g.categories.filter(c => c.pct != null).reduce((s, c) => s + c.weight * c.pct, 0);
+    return { need: (target * g.total - have) / leftWeight, on: left.length === 1 ? left[0].name : null };
+  }
+  if (g.basis === 'points' && g.total) {
+    const counted = g.rows.filter(r => !r.ignored), earned = counted.reduce((s, r) => s + r.earned, 0), possible = counted.reduce((s, r) => s + r.possible, 0);
+    const left = g.total - possible;
+    if (left <= 0) return null;
+    return { need: (target / 100 * g.total - earned) / left * 100, on: null };
+  }
+  return null;
+}
+
+// A grading setup the student saved (POST /api/state { grades: { courseId: … } }) → checked, or throws.
+export function cleanGradeConfig(v) {
+  const bad = m => { throw Object.assign(new Error(m), { status: 400 }); };
+  const out = {};
+  if (v.scheme != null) {
+    const s = v.scheme;
+    if (!['weighted', 'points'].includes(s.type)) bad('Pick weighted or points.');
+    const components = (Array.isArray(s.components) ? s.components : []).slice(0, 30).map(c => ({ name: String(c?.name || '').replace(/\s+/g, ' ').trim().slice(0, 60), value: Number(c?.value) }));
+    if (!components.length || components.some(c => !c.name || !Number.isFinite(c.value) || c.value <= 0 || c.value > 10000)) bad('Each part needs a name and a number above 0.');
+    if (new Set(components.map(c => c.name.toLowerCase())).size !== components.length) bad('Two parts have the same name.');
+    const scale = (Array.isArray(s.scale) ? s.scale : []).slice(0, 15).map(x => ({ letter: String(x?.letter || '').slice(0, 3), min: Number(x?.min) }))
+      .filter(x => /^[A-F][+-]?$/.test(x.letter) && Number.isFinite(x.min) && x.min >= 0 && x.min <= 100).sort((a, b) => b.min - a.min);
+    out.scheme = { type: s.type, components, scale, from: s.from === 'syllabus' ? 'syllabus' : 'you' };
+  }
+  const map = (o, f) => Object.fromEntries(Object.entries(o && typeof o === 'object' ? o : {}).slice(0, 300).map(([k, x]) => [String(k).slice(0, 200), f(x)]).filter(([, x]) => x != null));
+  if (v.assign != null) out.assign = map(v.assign, x => (typeof x === 'string' ? x.slice(0, 60) : null));
+  if (v.ignore != null) out.ignore = map(v.ignore, x => (x === true ? true : null));
+  if (v.include != null) out.include = map(v.include, x => (x === true ? true : null)); // category-total rows counted anyway
+  return out;
 }

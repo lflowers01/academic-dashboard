@@ -82,6 +82,9 @@ Latest release: https://github.com/lflowers01/academic-dashboard/releases/latest
 ## If the user wants Google Calendar
 Optional, off by default: ⚙ Settings → Features → Google Calendar → Connect. It runs `claude -p` headless (Haiku) with the claude.ai Google Calendar connector, so it needs Claude Code on PATH, signed in, and the connector connected at claude.ai → Settings → Connectors. Codex isn't supported for this feature yet. Settings shows exactly what's missing. Design: `spec-google-calendar.md`.
 
+## If the user wants Grades
+Optional, off by default: ⚙ Settings → Features → Grades (a Grades tab). No Claude needed. The math is `gradeFor` / `needFor` in `logic.mjs`; the student's setup per class lives in `state.grades`. Brightspace grade rows include category totals that count ungraded work as 0; `markCategoryTotals` leaves them out. Design: `spec-next-features.md` §3.
+
 ## If the user wants Syllabus scan
 Optional, off by default: ⚙ Settings → Features → Syllabus scan. Same requirement as Smart Announcements (Claude Code, signed in). Sources: Brightspace (`get_syllabus`, plus course-content files titled like a syllabus/schedule, downloaded to `data\syllabi\brightspace\`) and files the user adds (`data\syllabi\added\<courseId>\`). Text: `syllabus-text.mjs` (PDF via **unpdf**, which needs Node.js 22+; .docx via PowerShell's zip reader; HTML). Design: `spec-next-features.md` §2.
 
@@ -90,7 +93,7 @@ Optional, off by default: ⚙ Settings → Features → Smart Announcements. Sam
 
 ## Working on the code
 - The **Study on Boilerexams** button is automatic: the server fetches Boilerexams' course list (`api.boilerexams.com/courses`) on start-up, every 6 h, and whenever a new exam appears, then matches courses in `boilerexamsKey` (`logic.mjs`). Never hard-code a course list; if a course exists there, its exams get the button, otherwise none.
-- `npm test` must pass: `test.mjs` holds the unit tests, `test-server.mjs` runs the real server against `fixtures/fake-mcp.mjs`, `test-gcal.mjs` runs the Google bridge against `fixtures/fake-claude.mjs`, `test-smart.mjs` runs Smart Announcements against `fixtures/fake-smart.mjs`, `test-syllabus.mjs` runs Syllabus scan against `fixtures/fake-syllabus.mjs` (demo syllabi: `fixtures/demo-syllabi/`). Browser tests: `test-e2e.mjs`, `test-e2e-gcal.mjs`, `test-e2e-smart.mjs`, `test-e2e-syllabus.mjs`, `test-e2e-update.mjs`.
+- `npm test` must pass: `test.mjs` holds the unit tests, `test-server.mjs` runs the real server against `fixtures/fake-mcp.mjs`, `test-gcal.mjs` runs the Google bridge against `fixtures/fake-claude.mjs`, `test-smart.mjs` runs Smart Announcements against `fixtures/fake-smart.mjs`, `test-syllabus.mjs` runs Syllabus scan against `fixtures/fake-syllabus.mjs` (demo syllabi: `fixtures/demo-syllabi/`), `test-grades.mjs` checks the grade math on the shapes of real gradebooks. Browser tests: `test-e2e.mjs`, `test-e2e-gcal.mjs`, `test-e2e-smart.mjs`, `test-e2e-syllabus.mjs`, `test-e2e-grades.mjs`, `test-e2e-update.mjs`.
 - Headless Claude runs (Smart Announcements, Syllabus scan) go through `claude-json.mjs`: no tools, input on stdin, thinking off. Every answer is checked against the source text (`verifyFound`, `verifySyllabusEvent`, `verifyGrading` in `logic.mjs`). `npm run demo` serves fictional data from `data-demo/`.
 - `logic.mjs` is shared by the server, the browser and the tests (`viewModel`, status, exams, digest). Keep rules there, in one place.
 - In-app updates live in `update.mjs` (checks the GitHub releases API daily; never updates a folder with `.git`). Tests: `test-update.mjs` does a real update of a throwaway copy against a fake GitHub.

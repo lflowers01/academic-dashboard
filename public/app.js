@@ -158,11 +158,12 @@ async function signIn() {
 function alertText(msg) { $('#status').textContent = msg; }
 
 function renderTabs() {
-  const cal = view.tab === 'cal';
-  $('#tabCal').setAttribute('aria-selected', cal);
-  $('#tabAnn').setAttribute('aria-selected', !cal);
-  $('#panelCal').hidden = !cal;
-  $('#panelAnn').hidden = cal;
+  // features can add tabs (e.g. Grades: a tab button + panel of their own); an unknown tab falls back to the calendar
+  if (!['cal', 'ann'].includes(view.tab) && !document.querySelector(`[role=tab][data-tab="${view.tab}"]`)) view.tab = 'cal';
+  for (const [tab, panel, name] of [['#tabCal', '#panelCal', 'cal'], ['#tabAnn', '#panelAnn', 'ann']]) {
+    $(tab).setAttribute('aria-selected', view.tab === name);
+    $(panel).hidden = view.tab !== name;
+  }
 }
 
 // ----- to-do -----

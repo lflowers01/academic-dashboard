@@ -477,20 +477,82 @@
  },
  "grades": {
   "101": {
+   "courseId": 101,
    "grades": [
+    {
+     "name": "Quiz 1",
+     "pointsNumerator": 9,
+     "pointsDenominator": 10
+    },
+    {
+     "name": "Quiz 2",
+     "pointsNumerator": 7,
+     "pointsDenominator": 10
+    },
     {
      "name": "Quiz 3: Limits",
      "pointsNumerator": 8,
      "pointsDenominator": 10
+    },
+    {
+     "name": "WebAssign 1",
+     "pointsNumerator": 18,
+     "pointsDenominator": 20
+    },
+    {
+     "name": "WebAssign 2",
+     "pointsNumerator": 20,
+     "pointsDenominator": 20
+    },
+    {
+     "name": "WebAssign 3",
+     "pointsNumerator": 0,
+     "pointsDenominator": 20
+    },
+    {
+     "name": "Midterm Exam 1",
+     "pointsNumerator": 82,
+     "pointsDenominator": 100
+    },
+    {
+     "name": "Final Exam",
+     "pointsNumerator": 0,
+     "pointsDenominator": 0
     }
    ]
   },
   "105": {
+   "courseId": 105,
    "grades": [
     {
      "name": "Syllabus Quiz",
      "pointsNumerator": 10,
      "pointsDenominator": 10
+    },
+    {
+     "name": "Project 1",
+     "pointsNumerator": 88,
+     "pointsDenominator": 100
+    },
+    {
+     "name": "Lab 1",
+     "pointsNumerator": 10,
+     "pointsDenominator": 10
+    },
+    {
+     "name": "Lab 2",
+     "pointsNumerator": 9,
+     "pointsDenominator": 10
+    },
+    {
+     "name": "Lab 3",
+     "pointsNumerator": 0,
+     "pointsDenominator": 10
+    },
+    {
+     "name": "Exam 1",
+     "pointsNumerator": 71,
+     "pointsDenominator": 100
     }
    ]
   }

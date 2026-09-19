@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { buildItems, refreshDue, nextSlot, shortName, currentTerm, viewModel, digestItems, digestMessage, digestLink, boilerexamsKey, FEATURES, isVisible, htmlToText } from './logic.mjs';
+import { buildItems, refreshDue, nextSlot, shortName, currentTerm, viewModel, digestItems, digestMessage, digestLink, boilerexamsKey, FEATURES, isVisible, htmlToText, featureOn, cleanGradeConfig, courseTerm } from './logic.mjs';
 import { createGcal } from './gcal-routes.mjs';
 import { createSmart } from './smart-ann.mjs';
 import { createSyllabus } from './syllabus.mjs';
@@ -90,7 +90,7 @@ let tasks = readJson('tasks.json', []);
 if (!Array.isArray(tasks)) tasks = [];
 // notes: your own notes on Brightspace items, by item id. Never pruned, so a note survives an item briefly vanishing.
 // features: optional features switched on in ⚙ Settings (all off by default).
-const STATE_DEFAULTS = { done: {}, seenAnnouncements: [], hiddenCourses: {}, calendarHidden: {}, notes: {}, features: {}, notifications: true, lastDigest: null };
+const STATE_DEFAULTS = { done: {}, seenAnnouncements: [], hiddenCourses: {}, calendarHidden: {}, notes: {}, features: {}, grades: {}, notifications: true, lastDigest: null };
 let state = { ...STATE_DEFAULTS, ...readJson('state.json', {}) };
 delete state.notified; // from the earlier per-item notification design
 const meta = { lastAttemptAt: null, lastError: null, paused: false, retryIndex: 0, nextRetryAt: null, refreshing: null, notifyBlocked: null };
@@ -289,6 +289,9 @@ function payload() {
     smart: smart.payload(), // null unless Smart Announcements is on
     syllabus: syllabus.payload(), // null unless Syllabus scan is on
     update: updater.payload(),
+    // Grades (optional feature): each class's gradebook rows, plus the scheme its syllabus gives (if Syllabus scan read one)
+    grades: featureOn(state, 'grades') ? coursesOf(raw).filter(c => { const t = currentTerm(courses); return t && courseTerm(c) === t; })
+      .map(c => ({ id: c.id, short: c.short, rows: (raw.grades?.[c.id]?.grades || []).filter(r => r && typeof r.name === 'string'), suggestion: syllabus.grading(c.id) })) : null,
   };
 }
 
@@ -375,6 +378,12 @@ const server = http.createServer(async (req, res) => {
       }
       if (Array.isArray(b.seenAnnouncements)) state.seenAnnouncements = [...new Set([...state.seenAnnouncements, ...b.seenAnnouncements])];
       if (typeof b.notifications === 'boolean') state.notifications = b.notifications;
+      // Grades: how a class is graded, rows moved between categories, rows left out / counted anyway (checked first, then saved)
+      if (b.grades && typeof b.grades === 'object') {
+        const next = {};
+        for (const [id, v] of Object.entries(b.grades).slice(0, 50)) next[String(id).slice(0, 20)] = v === null ? null : cleanGradeConfig(v); // throws 400 on bad input
+        for (const [id, v] of Object.entries(next)) v === null ? delete state.grades[id] : (state.grades[id] = { ...(state.grades[id] || {}), ...v });
+      }
       if (b.updateSnooze === null || (b.updateSnooze && typeof b.updateSnooze.version === 'string')) state.updateSnooze = b.updateSnooze && { version: b.updateSnooze.version.slice(0, 20), until: new Date(Date.now() + 3 * 86400_000).toISOString() };
       for (const [k, v] of Object.entries(b.features || {})) if (FEATURES.some(f => f.id === k) && typeof v === 'boolean') state.features[k] = v; // unknown ids ignored
       if (b.features || b.hiddenCourses) { smart.tick(); syllabus.tick(); } // Smart Announcements switched on, or a course ticked again → scan now, not at the next tick
