@@ -12,6 +12,8 @@ const MCP = process.env.DASH_MCP_CMD ? JSON.parse(process.env.DASH_MCP_CMD) : ['
 const COURSE_TIMEOUT = Number(process.env.DASH_COURSE_TIMEOUT) || 150_000;
 const TOTAL_TIMEOUT = Number(process.env.DASH_TOTAL_TIMEOUT) || 4 * 60_000;
 const AUTH_RE = /sign[- ]?in|log ?in|authenticat|mfa|credential|keychain|password|session (has )?expired|re-?auth|setup/i;
+// brightspace-mcp-server's stderr when its session expired and it starts signing in by itself
+const REAUTH_RE = /auto-reauthenticat|launching brightspace-auth|MFA approval|Number match/i;
 
 export class FetchError extends Error {
   constructor(kind, message) { super(message); this.kind = kind; } // kind: 'auth' | 'network'
@@ -35,20 +37,26 @@ async function withClient(fn) {
     try { return JSON.parse(text); } catch { throw new FetchError(AUTH_RE.test(text) ? 'auth' : 'network', text.slice(0, 300) || `${name}: empty reply`); }
   };
   // Hard stop: kills the server, which makes every pending call reject, so nothing is left running.
-  let timedOut = false;
+  let stopped = null;
   let timer;
+  let abort;
   const stop = new Promise((_, reject) => {
-    timer = setTimeout(() => {
-      timedOut = true;
+    abort = err => {
+      if (stopped) return;
+      stopped = err;
       killTree(transport.pid);
       transport.close().catch(() => {});
-      reject(new FetchError('network', `Brightspace took longer than ${Math.round(TOTAL_TIMEOUT / 60000)} minutes`));
-    }, TOTAL_TIMEOUT);
+      reject(err);
+    };
+    timer = setTimeout(() => abort(new FetchError('network', `Brightspace took longer than ${Math.round(TOTAL_TIMEOUT / 60000)} minutes`)), TOTAL_TIMEOUT);
   });
+  // An expired session makes the server start a hidden sign-in that waits minutes for an MFA approval nobody can see.
+  // Its stderr says so: stop right away and report it as signed out. (Reading stderr also keeps its pipe from filling up.)
+  transport.stderr?.on('data', d => { if (REAUTH_RE.test(String(d))) abort(new FetchError('auth', 'Brightspace sign-in expired')); });
   try {
     return await Promise.race([(async () => { await client.connect(transport); return fn(call); })(), stop]);
   } catch (e) {
-    if (timedOut) throw new FetchError('network', `Brightspace took longer than ${Math.round(TOTAL_TIMEOUT / 60000)} minutes`);
+    if (stopped) throw stopped;
     if (e instanceof FetchError) throw e;
     throw new FetchError(AUTH_RE.test(e.message) ? 'auth' : 'network', e.message);
   } finally {
@@ -130,7 +138,13 @@ export function fetchSyllabusSources(courseIds, dir) {
   });
 }
 
-// Opens a visible terminal for number-matching MFA. Only ever called from a user click.
-export function openSignInWindow() {
-  execFile('cmd', ['/c', 'start', 'Brightspace sign-in', 'cmd', '/k', `npx -y ${PKG} auth`]);
+// Opens a visible terminal for number-matching MFA; onClose runs when it closes (it closes by itself after a
+// successful sign-in, and waits for a key press if sign-in failed). One window at a time. Never with a fake Brightspace.
+let signInOpen = false;
+export function openSignInWindow(onClose = () => {}) {
+  if (signInOpen || process.env.DASH_MCP_CMD) return false;
+  signInOpen = true;
+  execFile('cmd', [`/c start "Brightspace sign-in" /wait cmd /c "npx -y ${PKG} auth || pause"`],
+    { windowsVerbatimArguments: true }, () => { signInOpen = false; onClose(); });
+  return true;
 }

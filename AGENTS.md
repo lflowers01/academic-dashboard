@@ -60,7 +60,7 @@ Tell them briefly:
 - **⚙ Settings → Notifications**: when Windows starts and after every 3-hour refresh they get one Windows notification listing what's due today and early tomorrow (before 10 AM). "Send a test notification" is there too. Optional features live in ⚙ Settings → Features. If nothing appears: Windows Settings → System → Notifications → allow "Windows PowerShell".
 - **+ Add task** (or press N) for things Brightspace doesn't track, like homework on WebAssign/Achieve. Tick "This is an exam" for exams.
 - Exams found in Brightspace (quizzes named "Exam 2", "Midterm"…, or exam dates in announcements) show in gold on the calendar.
-- Red "sign-in needed" banner → click **Sign in**, approve on the phone, then **↻ Refresh**.
+- When the Brightspace sign-in expires, a sign-in window opens by itself: approve the number on the phone and the dashboard refreshes when it closes. If it was dismissed, the red "sign-in needed" banner's **Sign in** button reopens it.
 
 ## When the user asks to "update" the dashboard
 The dashboard updates itself: when a newer release exists, an **Update available** button appears in its header; **Update now** downloads the release, keeps `data\`, backs up the old files to `data\backup-v<old version>\`, and restarts. Point the user there first. Do it by hand (below) only if that fails, or if they ask you to.

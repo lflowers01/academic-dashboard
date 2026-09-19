@@ -77,6 +77,19 @@ test('expired sign-in: pauses, keeps serving, no Brightspace retries', async () 
     assert.equal(d.lastError.kind, 'auth');
     assert.equal(d.paused, true);
     assert.equal(d.nextRefreshAt, null);
+    assert.match(s.read('server.log'), /sign-in window skipped/); // opened for real, but never with a fake Brightspace
+  } finally { await s.stop(); }
+});
+
+test('session expired, server starts a hidden MFA sign-in: reported as signed out right away, not a timeout', async () => {
+  const s = await startServer({ mode: 'reauth' });
+  try {
+    const t0 = Date.now();
+    const d = await s.settled();
+    assert.ok(Date.now() - t0 < 15000, 'did not wait for the MCP timeout');
+    assert.equal(d.lastError.kind, 'auth');
+    assert.equal(d.paused, true);
+    assert.match(s.read('server.log'), /sign-in window/);
   } finally { await s.stop(); }
 });
 

@@ -224,7 +224,15 @@ async function doRefresh() {
   } catch (e) {
     const kind = e.kind || 'network';
     meta.lastError = { kind, message: String(e.message).slice(0, 300), at: new Date().toISOString() };
-    if (kind === 'auth') { meta.paused = true; meta.nextRetryAt = null; }
+    if (kind === 'auth') {
+      // Just signed out: open the sign-in window, and refresh when it closes. Still signed out after that → the banner
+      // stays and nothing reopens until the user clicks Sign in or Refresh (no window popping up every 3 hours).
+      if (!meta.paused) {
+        const { openSignInWindow } = await import('./brightspace.mjs');
+        log(`sign-in window ${openSignInWindow(() => refresh()) ? 'opened' : 'skipped'}`);
+      }
+      meta.paused = true; meta.nextRetryAt = null;
+    }
     else if (meta.retryIndex < RETRY_MIN.length) {
       meta.nextRetryAt = new Date(Date.now() + RETRY_MIN[meta.retryIndex++] * 60_000).toISOString();
     } else meta.nextRetryAt = null;
@@ -415,7 +423,7 @@ const server = http.createServer(async (req, res) => {
 
     if (p === '/api/signin' && req.method === 'POST') {
       const { openSignInWindow } = await import('./brightspace.mjs');
-      openSignInWindow();
+      openSignInWindow(() => refresh());
       return send(res, 200, { ok: true });
     }
 

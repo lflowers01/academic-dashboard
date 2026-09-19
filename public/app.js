@@ -153,7 +153,7 @@ function renderBanner({ visible }) {
 
 async function signIn() {
   await api('/api/signin', {});
-  alertText('A terminal window opened. Follow its instructions (approve the number on your phone), then click ↻ Refresh.');
+  alertText('A terminal window opened. Follow its instructions (approve the number on your phone). The dashboard refreshes when it closes.');
 }
 function alertText(msg) { $('#status').textContent = msg; }
 

@@ -162,7 +162,7 @@ Nothing here uses Claude. It's an estimate; your instructor's gradebook is offic
 
 ## Troubleshooting
 
-**Red banner: "Brightspace sign-in needed"**: your Brightspace login expired. Automatic refreshes pause, so your phone doesn't get MFA prompts at 3 AM. Click **Sign in**, approve the number on your phone in the window that opens, then click **↻ Refresh**.
+**Red banner: "Brightspace sign-in needed"**: your Brightspace login expired. A sign-in window opens by itself: approve the number on your phone, and the dashboard refreshes when the window closes. Automatic refreshes pause until then, so your phone doesn't get MFA prompts at 3 AM. If you closed the window, click **Sign in** to open it again.
 
 **Yellow banner: "Couldn't reach Brightspace"**: usually no internet. It keeps showing your last data and retries in 5, 15, then 30 minutes.
 

@@ -2,6 +2,7 @@
 //   ok          normal data (dates relative to now)
 //   auth        course list fails with a sign-in error
 //   hang        course list never answers
+//   reauth      session expired: starts a hidden MFA sign-in (stderr) and never answers
 //   courseauth  one course answers "unauthorized" (must NOT look like an expired login)
 // Every call is appended to FAKE_LOG so tests can see what was asked.
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -50,6 +51,10 @@ server.setRequestHandler(CallToolRequestSchema, async req => {
   if (name === 'get_my_courses') {
     if (MODE === 'auth') return { ...text('Brightspace sign-in required. Run: npx -y brightspace-mcp-server@latest auth'), isError: true };
     if (MODE === 'hang') return new Promise(() => {});
+    if (MODE === 'reauth') { // what the real server prints when its session expired, then it waits for MFA
+      process.stderr.write('[INFO] Attempting auto-reauthentication...\n[WARN] Waiting up to 5 minutes for Microsoft MFA approval on your device.\n');
+      return new Promise(() => {});
+    }
     return text(courses);
   }
   if (name === 'get_assignments') {
