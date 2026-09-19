@@ -325,7 +325,8 @@ async function run(browserName) {
       assert.equal(await page.getAttribute('#modeDay', 'aria-pressed'), 'true');
       assert.ok(await page.locator('#calGrid .day-grid').count() === 1);
       assert.ok(await page.locator('#calGrid .pin-row .chip').count() >= 1, 'today has deadlines as pins');
-      assert.equal(await page.locator('#calGrid .now-line').count(), 1);
+      const hr = new Date().getHours(); // the timeline runs 7 AM–11 PM, so late at night there is no now-line
+      if (hr >= 8 && hr < 22) assert.equal(await page.locator('#calGrid .now-line').count(), 1);
       const title0 = await page.innerText('#calTitle');
       await page.click('#next');
       assert.notEqual(await page.innerText('#calTitle'), title0);

@@ -208,7 +208,8 @@ async function run(browserName) {
       await s.post('/api/gcal/settings', { calendars: { [CLUBS]: { show: false } } });
       await s.post('/api/gcal/settings', { calendars: { [CLUBS]: { show: true } } });
       assert.equal((await s.data()).gcal.calendars.find(c => c.id === CLUBS).todo, false, 'hiding a calendar turns its To-do off');
-      const todayClasses = (await s.data()).gcal.events.some(e => e.calendarId === CLASSES && new Date(e.start).toDateString() === new Date().toDateString());
+      // (events this suite created from a Brightspace item are merged into that item, so they never show in the strip)
+      const todayClasses = (await s.data()).gcal.events.some(e => e.calendarId === CLASSES && !e.title.startsWith('Due: ') && new Date(e.start).toDateString() === new Date().toDateString());
       await page.click('#btnSettings'); await page.click('#settingsNav [data-feature]');
       const box = page.getByLabel('Show Classes in the to-do list');
       assert.equal(await box.isChecked(), true, '(turned on in this suite setup)');
