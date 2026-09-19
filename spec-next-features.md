@@ -92,7 +92,7 @@ OneDrive-locked folder → the copy fails, nothing restarts, and the error says 
 under the limit); no Settings dot (it would fight the notifications dot; the header pill is enough); the restart starts
 `node server.mjs` detached with `DASH_WAIT_PORT=1`, and the new server retries the port for up to 30 s while the old one
 exits; a failure after copying restores the backup automatically; demo and test servers never call GitHub unless
-`DASH_UPDATE_API` points them at a fake. \`test-update.mjs\` performs a real update of a throwaway install (download →
+`DASH_UPDATE_API` points them at a fake. `test-update.mjs` performs a real update of a throwaway install (download →
 check → backup → copy → restart as the new version, ~5 s) and checks the refusals (mismatched version, git checkout).
 
 ---
