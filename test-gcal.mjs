@@ -4,17 +4,19 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
-let nextPort = 5200 + Math.floor(Math.random() * 300);
+// a port the OS says is free (a fixed range can hit some other local server, which answers with HTML)
+const freePort = () => new Promise(r => { const srv = net.createServer().listen(0, '127.0.0.1', () => { const p = srv.address().port; srv.close(() => r(p)); }); });
 const CLASSES = 'classes@group.calendar.google.com', CLUBS = 'clubs@group.calendar.google.com', HOLIDAYS = 'holidays@group.v.calendar.google.com';
 
 async function start({ mode = 'ok', env = {}, dir } = {}) {
   dir ??= fs.mkdtempSync(path.join(os.tmpdir(), 'dash-gcal-'));
-  const port = nextPort++;
+  const port = await freePort();
   const child = spawn(process.execPath, [path.join(ROOT, 'server.mjs')], { windowsHide: true, stdio: 'ignore', env: {
     ...process.env, DASH_PORT: String(port), DASH_DATA: dir,
     DASH_MCP_CMD: JSON.stringify(['node', path.join(ROOT, 'fixtures', 'fake-mcp.mjs')]),
