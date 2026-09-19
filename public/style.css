@@ -123,6 +123,7 @@ main { padding: 16px 20px 40px; }
 .chip.urgent::before { content: "⚠ "; color: var(--red); }
 .chip .t { font-weight: 700; margin-right: 4px; }
 .week-row.tall .chip { white-space: normal; }
+.week-row .chip.span { white-space: nowrap; } /* bars sit in fixed-height lanes: one line, or they spill over the header and each other */
 .more { border: none; background: none; padding: 2px 6px; font-size: 12px; color: var(--accent); text-align: left; }
 
 /* announcements */
@@ -152,7 +153,7 @@ dialog input, dialog select, dialog textarea { display: block; width: 100%; marg
 .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .row3 { display: grid; grid-template-columns: 1fr 1fr 0.8fr; gap: 10px; }
 @media (max-width: 560px) { .row3 { grid-template-columns: 1fr; } }
-.chip.range { border-left-style: double; border-left-width: 6px; }
+
 .dlg-actions { display: flex; gap: 8px; align-items: center; margin-top: 12px; }
 .spacer { flex: 1; }
 .detail dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 12px 0; }
