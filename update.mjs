@@ -44,7 +44,9 @@ const robocopy = (from, to, extra = []) => run('robocopy', [from, to, '/E', '/NF
 const sameFile = (a, b) => { try { return fs.readFileSync(a).equals(fs.readFileSync(b)); } catch { return false; } };
 
 export function createUpdater({ root, dataDir, readJson, writeJson, log, onRestart }) {
-  const version = () => JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version;
+  // the version this process is running, read once: after the copy, package.json already holds the new one
+  const running = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version;
+  const version = () => running;
   const isGit = fs.existsSync(path.join(root, '.git'));
   let info = { checkedAt: null, latest: null, notes: '', asset: null, url: null, error: null, ...readJson('update.json', {}) };
   let job = null; // { step, error } while installing
@@ -130,7 +132,7 @@ export function createUpdater({ root, dataDir, readJson, writeJson, log, onResta
 
 // Restart: start a new server that waits for the port, then this one exits.
 export function restartServer(root, closeServer) {
-  const child = spawn(process.execPath, ['server.mjs'], { cwd: root, detached: true, stdio: 'ignore', windowsHide: true, env: { ...process.env, DASH_WAIT_PORT: '1' } });
+  const child = spawn(process.execPath, ['server.mjs', ...process.argv.slice(2)], { cwd: root, detached: true, stdio: 'ignore', windowsHide: true, env: { ...process.env, DASH_WAIT_PORT: '1' } });
   child.unref();
   closeServer(() => process.exit(0));
   setTimeout(() => process.exit(0), 3000).unref();
