@@ -169,6 +169,7 @@ dialog input, dialog select, dialog textarea { display: block; width: 100%; marg
 .chip.exam { background: var(--c, #a3a3a3); color: #000; font-weight: 700; border-left: 4px solid #cfb991; outline: 2px solid #cfb991; outline-offset: -2px; }
 .chip.exam .x { background: #000; color: #cfb991; font-size: 10px; font-weight: 800; padding: 0 4px; border-radius: 3px; margin-right: 5px; letter-spacing: .04em; }
 .chip.exam.urgent::before { color: #000; }
+.week-row:not(.tall) .chip.urgent::before { content: none; } /* Month view: no ⚠ (cells are narrow; the to-do list shows urgency) */
 .chip.exam.done { opacity: .45; }
 .badge.b-exam { color: #000; background: #cfb991; border-color: #cfb991; }
 /* exams: a straight gold line in the gutter left of the row (not inside its rounded corner, next to the checkbox) */

@@ -163,7 +163,7 @@ function renderTabs() {
 function itemRow(i, { showDay = false } = {}) {
   const badges = [];
   if (i.exam) badges.push(h('span', { class: 'badge b-exam' }, i.kind === 'exam' ? 'EXAM · from announcement' : 'EXAM'));
-  if (i.rangeStart && !i.done && i.st !== 'overdue') badges.push(h('span', { class: `badge ${i.st === 'today' ? 'b-today' : 'b-info'}` }, `${i.st === 'today' ? 'NOW · ' : ''}${rangeLabel(i)}`));
+  if (i.rangeStart && !i.done && i.st !== 'overdue') { if (i.st !== 'today') badges.push(h('span', { class: 'badge b-info' }, rangeLabel(i))); } // under Today, a running range needs no badge
   else if (i.st === 'overdue') badges.push(h('span', { class: 'badge b-overdue' }, `⚠ OVERDUE · ${fmtDay(i.due)}`));
   else if (i.st === 'today') badges.push(h('span', { class: 'badge b-today' }, `TODAY ${dueLabel(i)}`));
   else if (i.st === 'tomorrow') badges.push(h('span', { class: 'badge b-tomorrow' }, `TOMORROW ${dueLabel(i)}`));
@@ -172,7 +172,6 @@ function itemRow(i, { showDay = false } = {}) {
   if (i.timeLimit) badges.push(h('span', { class: 'badge b-info' }, `${i.timeLimit} min timed`));
   if (i.points) badges.push(h('span', {}, `${i.points} pts`));
   if (i.isNew && !i.done) badges.push(h('span', { class: 'badge b-new' }, 'NEW'));
-  if (i.kind === 'task') badges.push(h('span', { title: 'Manual task' }, '✎'));
   if (i.done && (i.submitted || i.graded) && typeof data.state.done[i.id] !== 'boolean') badges.push(h('span', {}, i.submitted ? '✓ submitted' : '✓ graded'));
   if (noteOf(i)) badges.push(h('span', { class: 'note-mark', title: noteOf(i) }, '📝 note'));
   for (const f of hooks.rowBadges) badges.push(...(f(i, lastModel) || []));
@@ -251,7 +250,9 @@ function renderCalendar(m) {
   }
   // within a day: by time, so feature entries and Brightspace items interleave correctly
   const at = e => +(e.at || (e.kind === 'opens' ? new Date(e.i.start) : new Date(e.i?.due || 0)));
-  for (const k in singles) singles[k].sort((a, b) => at(a) - at(b));
+  // Month view: finished items sink to the bottom of their day (and so are the first behind "+N more")
+  const doneLast = e => (view.mode === 'month' && e.kind === 'due' && e.i?.done ? 1 : 0);
+  for (const k in singles) singles[k].sort((a, b) => doneLast(a) - doneLast(b) || at(a) - at(b));
   const todayKey = dayKey(now);
   const rows = [];
   for (let w = 0; w < days / 7; w++) {

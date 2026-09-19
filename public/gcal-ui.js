@@ -124,13 +124,14 @@ hooks.todoTop.push(m => {
 hooks.toolbar.push(m => {
   if (!on()) return [];
   const out = [];
-  if (notice) out.push(h('span', { class: `gnotice ${notice.kind}`, role: notice.kind === 'error' ? 'alert' : 'status' }, notice.text,
-    notice.kind === 'error' ? h('button', { type: 'button', class: 'gnotice-x', 'aria-label': 'Dismiss', onclick: () => { notice = null; D.render(); } }, '✕') : null));
   if (G().settings.showOnCalendar && G().connected) {
     out.push(h('div', { class: 'seg src-filter', role: 'group', 'aria-label': 'Show on calendar' },
       ...[['all', 'All'], ['brightspace', 'Brightspace'], ['google', 'Google']].map(([k, label]) =>
         h('button', { type: 'button', 'aria-pressed': src === k, 'data-src': k, onclick: () => { src = k; D.pref('gsrc', k); D.render(); } }, label))));
   }
+  // the result of the last Google action sits right of the filter
+  if (notice) out.push(h('span', { class: `gnotice ${notice.kind}`, role: notice.kind === 'error' ? 'alert' : 'status' }, notice.text,
+    notice.kind === 'error' ? h('button', { type: 'button', class: 'gnotice-x', 'aria-label': 'Dismiss', onclick: () => { notice = null; D.render(); } }, '✕') : null));
   const range = viewRange();
   if (range && G().calendars.some(c => c.show) && !covered(range)) {
     const month = new Date(range.from.getFullYear(), range.from.getMonth(), 1);

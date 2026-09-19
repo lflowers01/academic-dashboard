@@ -68,6 +68,8 @@ async function run(browserName) {
       assert.equal(await page.locator('#calGrid .now-mark').count(), 0, 'month view: none');
       const cells = await page.$$eval('#calGrid .day-items', cs => cs.map(c => ({ over: c.scrollHeight > c.clientHeight + 1, more: c.querySelector('.more:not([hidden])')?.textContent || '', hidden: c.querySelectorAll(':scope > [hidden]:not(.more)').length })));
       assert.ok(cells.every(c => !c.over), 'no month cell overflows');
+      const doneFirst = await page.$$eval('#calGrid .day-items', cs => cs.some(c => { const k = [...c.querySelectorAll(':scope > .chip')].map(x => x.classList.contains('done')); return k.some((d, n) => d && k.slice(n + 1).some(x => !x)); }));
+      assert.equal(doneFirst, false, 'finished items are at the bottom of their day');
       assert.ok(cells.every(c => c.more ? c.more === `+${c.hidden} more` : c.hidden === 0), '+N more counts exactly the hidden boxes');
     });
 
