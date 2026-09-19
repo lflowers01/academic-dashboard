@@ -14,7 +14,7 @@ const save = (id, patch) => { if (patch.scheme) target = null; return D.patchSta
 
 // tab + panel
 const tab = h('button', { role: 'tab', id: 'tabGrades', 'data-tab': 'grades', 'aria-selected': 'false', 'aria-controls': 'panelGrades', hidden: true,
-  onclick: () => { D.view.tab = 'grades'; D.pref('tab', 'grades'); D.render(); } }, 'Grades');
+  onclick: () => { D.view.tab = 'grades'; D.pref('tab', 'grades'); D.render(); } }, 'Grades', h('span', { class: 'beta' }, 'Beta'));
 $('#tabAnn').after(tab);
 const panel = h('section', { id: 'panelGrades', role: 'tabpanel', hidden: true });
 $('#panelAnn').after(panel);
@@ -37,13 +37,15 @@ function classesShown() {
 const gradeOf = c => gradeFor(c.rows, cfgOf(c.id), whatIf[c.id] || {});
 // Not set up: the number is a plain average of Brightspace's rows (its category totals included), so it isn't a grade.
 const bigGrade = g => (g.basis === 'simple' ? [h('span', { class: 'grade-unset' }, 'Not set up yet')] : [pct(g.pct), g.letter ? h('span', { class: 'grade-letter' }, g.letter) : null]);
-const basisText = (c, g) => {
+const basisText = (c, g, inDialog) => {
   const s = cfgOf(c.id).scheme;
   if (g.basis === 'weighted') return `Weighted by ${s?.from === 'syllabus' ? 'your syllabus' : 'your setup'}`;
   if (g.basis === 'points') return `Total points (${s?.from === 'syllabus' ? 'from your syllabus' : 'your setup'})`;
-  const rough = `Brightspace’s rows average ${pct(g.pct)}, but that counts its category totals too`;
-  return c.suggestion ? `Your syllabus has a grading scheme: open to use it. ${rough}.` : `Open to set up how it’s graded. ${rough}.`;
+  const rough = `Brightspace’s rows average ${pct(g.pct)}, but that counts its category totals too.`;
+  if (inDialog) return rough;
+  return c.suggestion ? `Your syllabus has a grading scheme: open to use it. ${rough}` : `Open to set up how it’s graded. ${rough}`;
 };
+const noGrades = () => h('span', { class: 'grade-unset' }, 'No grades yet');
 
 function renderPanel() {
   const list = classesShown();
@@ -53,8 +55,8 @@ function renderPanel() {
       const g = gradeOf(c);
       return h('button', { type: 'button', class: 'grade-card', onclick: () => openDialog(c.id) },
         h('div', { class: 'grade-head' }, h('span', { class: 'tag', style: { '--c': D.data.colors?.[c.id] || '#cbd5e1' } }, c.short)),
-        h('div', { class: 'grade-big' }, g.pct == null ? '—' : bigGrade(g)),
-        h('div', { class: 'muted grade-basis' }, g.pct == null ? 'No grades yet' : basisText(c, g)),
+        h('div', { class: 'grade-big' }, g.pct == null ? noGrades() : bigGrade(g)),
+        g.pct == null ? null : h('div', { class: 'muted grade-basis' }, basisText(c, g)),
         g.share != null ? h('div', { class: 'grade-share', title: `${Math.round(g.share * 100)}% of the course grade is in` },
           h('div', { class: 'grade-share-bar', style: { width: `${Math.round(g.share * 100)}%` } })) : null,
         g.share != null ? h('div', { class: 'muted grade-basis' }, `${Math.round(g.share * 100)}% of the grade is in`) : null);
@@ -76,10 +78,10 @@ function fillDialog(id) {
   target ||= ([...scale].reverse().find(s => s.min > (g.pct ?? 0)) || scale[0]).letter; // the next grade up
   const nodes = [
     h('div', { class: 'grade-dlg-head' },
-      h('h2', {}, h('span', { class: 'tag', style: { '--c': D.data.colors?.[id] || '#cbd5e1' } }, c.short), ' ', g.pct == null ? '—' : bigGrade(g)),
-      h('p', { class: 'muted' }, g.pct == null ? 'No grades yet.' : basisText(c, g), g.share != null ? ` · ${Math.round(g.share * 100)}% of the grade is in` : '')),
+      h('h2', {}, h('span', { class: 'tag', style: { '--c': D.data.colors?.[id] || '#cbd5e1' } }, c.short), ' ', g.pct == null ? noGrades() : bigGrade(g)),
+      g.pct == null ? null : h('p', { class: 'muted' }, basisText(c, g, true), g.share != null ? ` · ${Math.round(g.share * 100)}% of the grade is in` : '')),
     schemeSection(c, cfg),
-    needSection(g, scale),
+    g.basis === 'simple' ? null : needSection(g, scale), // needs a grading setup to mean anything
     rowsSection(c, cfg, g, wi),
     Object.keys(wi).length ? h('p', {}, h('button', { type: 'button', onclick: () => { whatIf[id] = {}; fillDialog(id); render(); } }, 'Reset what-ifs')) : null,
     h('p', { class: 'muted' }, h('small', {}, 'An estimate from Brightspace scores and your syllabus; what-ifs are only on this page. Your instructor’s gradebook is official.')),
@@ -142,7 +144,7 @@ function needSection(g, scale) {
     scale.map(s => h('option', { value: s.letter, selected: s.letter === target }, `${s.letter} (${s.min}%)`)));
   const t = scale.find(s => s.letter === target) || scale[0];
   const n = needFor(t.min, g);
-  const say = !n ? (g.basis === 'simple' ? 'Set up how the class is graded to see this.' : 'Nothing is left to grade.')
+  const say = !n ? 'Nothing is left to grade.'
     : n.need <= 0 ? `You have it even with 0% on ${n.on ? `the ${n.on}` : 'everything left'}.`
     : n.need > 100 ? `Out of reach: it would take ${pct(n.need)} on ${n.on ? `the ${n.on}` : 'everything left'}.`
     : [`You need `, h('strong', {}, pct(n.need)), ` on ${n.on ? `the ${n.on}` : 'everything left'}.`];

@@ -59,6 +59,9 @@ async function run(browserName) {
 
     await step('setting up weights: the grade follows them, and "what do I need" names the final', async () => {
       await card('MA 161').click();
+      assert.equal(await page.locator('#dlgGrade .grade-need').count(), 0, 'no "what do I need" before the class is set up');
+      assert.doesNotMatch(await page.innerText('#dlgGrade'), /Open to set up/);
+      assert.match(await card('ENGL 106').innerText(), /No grades yet/);
       await page.click('#dlgGrade button:has-text("Categories with % weights")');
       const parts = [['Quizzes', 15], ['WebAssign', 15], ['Midterm Exams', 40], ['Final Exam', 30]];
       for (const [i, [name, value]] of parts.entries()) {

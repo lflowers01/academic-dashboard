@@ -61,7 +61,7 @@ async function installAt(dir) {
 function cleanup(dir) {
   const j = path.join(dir, 'install', 'node_modules');
   try { if (fs.lstatSync(j)) fs.rmdirSync(j); } catch {}
-  fs.rmSync(dir, { recursive: true, force: true });
+  fs.rmSync(dir, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }); // a just-stopped server can hold the folder briefly
 }
 
 async function startInstalled(install, dataDir, api) {

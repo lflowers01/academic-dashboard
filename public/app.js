@@ -643,7 +643,7 @@ function renderFeatures() {
   $('#featureList').replaceChildren(...(FEATURES.length ? FEATURES.map(f => h('div', { class: 'feature-row' },
     h('label', { class: 'switch-row' },
       h('input', { type: 'checkbox', role: 'switch', checked: featureOn(data.state, f.id), onchange: e => patchState({ features: { [f.id]: e.target.checked } }).then(load).then(renderFeatures).catch(() => {}) }), // load: the feature's own data (e.g. data.smart) only comes with a fresh fetch
-      h('span', {}, h('strong', {}, f.name), h('br'), h('small', { class: 'muted' }, f.description))))) : [h('p', { class: 'muted' }, 'No optional features yet.')]));
+      h('span', {}, h('strong', {}, f.name), f.beta ? h('span', { class: 'beta' }, 'Beta') : null, h('br'), h('small', { class: 'muted' }, f.description))))) : [h('p', { class: 'muted' }, 'No optional features yet.')]));
 }
 
 function openCourses() {
