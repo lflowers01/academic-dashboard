@@ -220,7 +220,8 @@ dialog.settings { width: min(760px, calc(100vw - 32px)); min-height: min(560px, 
 .switch-row input { width: 18px; height: 18px; margin-top: 2px; accent-color: #cfb991; }
 
 /* Google Calendar (optional feature): outlined chips in the calendar's color, so they never look like Brightspace items */
-.chip.gchip { background: transparent; border: 1.5px solid var(--g, #8ab4f8); border-left-width: 4px; color: var(--text); }
+/* Google events: same square shape as Brightspace items, but outlined all round with no left bar and no fill */
+.chip.gchip { background: transparent; border: 1.5px solid var(--g, #8ab4f8); color: var(--text); }
 .chip.gchip:hover { background: color-mix(in srgb, var(--g, #8ab4f8) 14%, transparent); }
 .chip.gchip .gmark { color: var(--g, #8ab4f8); margin-right: 4px; font-weight: 700; }
 .chip.gchip .t { color: var(--g, #8ab4f8); }
