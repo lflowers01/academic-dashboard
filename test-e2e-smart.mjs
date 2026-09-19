@@ -52,6 +52,8 @@ async function run(browserName) {
       await toggle();
       await card().waitFor({ timeout: 15000 });
       assert.match(await card().innerText(), /Found in announcements\s*· 3 to review/);
+      assert.equal(await page.locator('.smart-row').count(), 0, 'collapsed by default');
+      await page.click('.smart-card .strip-head');
       assert.match(await card().innerText(), /Industrial Roundtable/);
       await page.click('#modeWeek');
       for (let n = 0; n < 2 && !(await page.locator('#calGrid .chip', { hasText: 'SI review session' }).count()); n++) await page.click('#next');

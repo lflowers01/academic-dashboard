@@ -21,7 +21,7 @@ async function decide(id, action, fields) {
 }
 
 // ---------- review card ----------
-let open = D.pref('sreview') !== 'closed';
+let open = D.pref('sreview') === 'open'; // collapsed until you open it (remembered)
 hooks.todoTop.push(m => {
   const list = on() ? S().review.filter(f => m.visible.has(f.courseId)) : []; // unticking a course hides its items at once
   if (!list.length) return null;
