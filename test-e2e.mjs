@@ -31,7 +31,7 @@ async function run(browserName) {
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
   page.on('console', m => m.type() === 'error' && errors.push(m.text()));
-  const step = async (name, fn) => { try { await fn(); console.log(`  ✔ ${name}`); } catch (e) { console.log(`  ✖ ${name}: ${e.message.split('\n')[0]}`); process.exitCode = 1; } };
+  const step = async (name, fn) => { try { await fn(); console.log(`  ✔ ${name}`); } catch (e) { console.log(`  ✖ ${name}: ${e.message.split('\n').filter(Boolean).slice(0, 4).join(' / ')}`); process.exitCode = 1; } };
   const clean = t => !/\[object |(^|\s)(null|undefined|NaN)(\s|$)|Invalid Date/.test(t);
   console.log(`${browserName}:`);
   try {
@@ -66,10 +66,13 @@ async function run(browserName) {
       assert.equal(await page.locator('#calGrid .now-mark').count(), 1, 'week view: one now line');
       await page.click('#modeMonth');
       assert.equal(await page.locator('#calGrid .now-mark').count(), 0, 'month view: none');
+      const cells = await page.$$eval('#calGrid .day-items', cs => cs.map(c => ({ over: c.scrollHeight > c.clientHeight + 1, more: c.querySelector('.more:not([hidden])')?.textContent || '', hidden: c.querySelectorAll(':scope > [hidden]:not(.more)').length })));
+      assert.ok(cells.every(c => !c.over), 'no month cell overflows');
+      assert.ok(cells.every(c => c.more ? c.more === `+${c.hidden} more` : c.hidden === 0), '+N more counts exactly the hidden boxes');
     });
 
     await step('+N more opens that day in Day view', async () => {
-      const more = page.locator('#calGrid .more').first();
+      const more = page.locator('#calGrid .more:not([hidden])').first();
       if (await more.count()) {
         await more.click();
         assert.equal(await page.getAttribute('#modeDay', 'aria-pressed'), 'true');
@@ -123,6 +126,31 @@ async function run(browserName) {
       await page.waitForTimeout(500);
       const tasks = (await (await fetch(srv.base + '/api/data')).json()).tasks;
       assert.equal(tasks.length, 0);
+    });
+
+    await step('a crowded day: its week row grows to show 5 boxes, then "+N more"; boxes keep their height', async () => {
+      const day = new Date(); day.setDate(day.getDate() + 1);
+      if (day.getMonth() !== new Date().getMonth()) day.setDate(day.getDate() - 2); // stay in this month's grid
+      const ymd = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
+      const ids = [];
+      for (let n = 0; n < 9; n++) ids.push((await (await fetch(srv.base + '/api/tasks', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: `Crowd ${n}`, date: ymd, time: `0${n}:30` }) })).json()).id);
+      await page.reload(); await page.waitForSelector('#todoList .item'); await page.click('#modeMonth');
+      const cell = page.locator('#calGrid .day-items', { has: page.locator('.chip', { hasText: 'Crowd 0' }) });
+      const r = await cell.evaluate(c => {
+        const shown = [...c.children].filter(x => !x.hidden && !x.classList.contains('more'));
+        const crowd = shown.filter(x => x.textContent.includes('Crowd'));
+        const normal = document.querySelector('#calGrid .day-items .chip:not(.gchip)');
+        return { shown: shown.length, more: c.querySelector('.more:not([hidden])')?.textContent, heights: [...new Set(crowd.map(x => x.offsetHeight))], normal: normal.offsetHeight, over: c.scrollHeight > c.clientHeight + 1 };
+      });
+      try {
+      assert.ok(r.shown >= 5, `shows at least 5, got ${r.shown}`);
+      assert.match(r.more || '', /^\+\d+ more$/);
+      assert.equal(r.over, false, JSON.stringify(r));
+      assert.deepEqual(r.heights, [r.normal], 'crowded boxes are the same height as any other box: ' + JSON.stringify(r));
+      } finally {
+        for (const id of ids) await fetch(srv.base + '/api/tasks/' + encodeURIComponent(id), { method: 'DELETE', headers: { 'Content-Type': 'application/json' } });
+        await page.reload(); await page.waitForSelector('#todoList .item');
+      }
     });
 
     await step('Cancel button and Ctrl+N', async () => {

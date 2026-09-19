@@ -100,7 +100,10 @@ main { padding: 16px 20px 40px; }
 .week-row.tall { min-height: 360px; }
 .week-row > .day { border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); cursor: pointer; }
 .week-row > .num, .week-row > .day-items, .week-row > .chip { position: relative; z-index: 1; }
-.day-items { display: flex; flex-direction: column; gap: 3px; padding: 2px 4px 4px; min-width: 0; cursor: pointer; }
+.day-items { display: flex; flex-direction: column; gap: 3px; padding: 2px 4px 4px; min-width: 0; min-height: 0; cursor: pointer; }
+.week-row:not(.tall) .day-items { overflow: hidden; }
+.day-items > [hidden] { display: none; }
+.day-items > * { flex-shrink: 0; } /* crowded cells hide boxes behind "+N more"; they never squash them */
 .num.today { color: var(--bg); }
 .num.today::after { content: ""; }
 .chip.span { margin: 2px 4px; align-self: center; width: auto; border-left-width: 4px; }

@@ -107,6 +107,7 @@ function render() {
   renderLegend(m);
   renderAnnouncements(m);
   renderNotifyButton();
+  fitMonth(); // last: the legend and toolbar above can move the grid
 }
 
 function renderStatus() {
@@ -252,7 +253,6 @@ function renderCalendar(m) {
   const at = e => +(e.at || (e.kind === 'opens' ? new Date(e.i.start) : new Date(e.i?.due || 0)));
   for (const k in singles) singles[k].sort((a, b) => at(a) - at(b));
   const todayKey = dayKey(now);
-  const limit = view.mode === 'month' ? 3 : Infinity;
   const rows = [];
   for (let w = 0; w < days / 7; w++) {
     const ws = addDays(start, w * 7);
@@ -267,9 +267,12 @@ function renderCalendar(m) {
         style: { 'grid-column': String(col), 'grid-row': '1 / -1' }, onclick: open }));
       kids.push(h('div', { class: `num${k === todayKey ? ' today' : ''}`, style: { 'grid-column': String(col), 'grid-row': '1' }, onclick: () => goToDay(d), title: 'Open this day' },
         view.mode === 'month' ? d.getDate() : ''));
-      kids.push(h('div', { class: 'day-items', style: { 'grid-column': String(col), 'grid-row': String(lanes + 2) }, onclick: open },
-        withNowMark(own.slice(0, limit).map(e => e.node || chipFor(e)), view.mode === 'week' && k === todayKey ? own.findIndex(e => at(e) > now) : null),
-        own.length > limit ? h('button', { class: 'more', type: 'button', onclick: () => goToDay(d) }, `+${own.length - limit} more`) : null));
+      // the day's boxes start right under this day's own bars (not under the week's deepest lane) and use the rest of the cell;
+      // in Month view fitMonth() then hides what doesn't fit behind "+N more"
+      const bars = segs.filter(s => s.col <= n && n < s.col + s.span).reduce((x, s) => Math.max(x, s.lane + 1), 0);
+      kids.push(h('div', { class: 'day-items', style: { 'grid-column': String(col), 'grid-row': `${bars + 2} / -1` }, onclick: open },
+        withNowMark(own.map(e => e.node || chipFor(e)), view.mode === 'week' && k === todayKey ? own.findIndex(e => at(e) > now) : null),
+        view.mode === 'month' ? h('button', { class: 'more', type: 'button', hidden: true, onclick: () => goToDay(d) }) : null));
     }
     for (const s of segs) kids.push(s.node ? s.node(s) : spanChip(s));
     rows.push(h('div', { class: `week-row${view.mode === 'week' ? ' tall' : ''}`, style: { 'grid-template-rows': `${view.mode === 'month' ? '22px' : '4px'} ${lanes ? `repeat(${lanes}, 26px) ` : ''}1fr` } }, kids));
@@ -288,6 +291,44 @@ function withNowMark(nodes, index) {
 
 // '8:00 PM–9:00 PM' → '8p–9p', '11:59 PM' → '11:59p' (month cells are narrow)
 const compactTime = t => t.split('–').map(p => p.replace(':00', '').replace(/\s?([AP])M/i, (_, x) => x.toLowerCase())).join('–');
+
+// Month view: rows fill the window (at least 110 px). A busy week's row grows until its busiest day shows up to
+// MONTH_SHOWN boxes plus a "+N more" line; boxes never shrink. Whatever doesn't fit becomes "+N more".
+const MONTH_SHOWN = 5;
+function fitMonth() {
+  const grid = $('#calGrid');
+  if (view.mode !== 'month' || !grid.offsetParent) return; // not visible → nothing to measure
+  const rows = [...grid.querySelectorAll('.week-row')];
+  const top = grid.getBoundingClientRect().top + scrollY + (grid.querySelector('.cal-head')?.offsetHeight || 0);
+  const base = Math.max(110, Math.floor((innerHeight - top - 40) / rows.length));
+  for (const r of rows) {
+    r.style.height = `${base}px`;
+    const cells = [...r.querySelectorAll('.day-items')].map(cell => {
+      const more = cell.querySelector('.more');
+      const chips = [...cell.children].filter(c => c !== more);
+      for (const c of chips) c.hidden = false;
+      more.hidden = false; more.textContent = '+0 more'; // shown (with text) while measuring so its height counts
+      return { cell, more, chips };
+    });
+    const rowTop = r.getBoundingClientRect().top;
+    let need = base;
+    for (const { cell, more, chips } of cells) {
+      const k = Math.min(chips.length, MONTH_SHOWN);
+      if (!k) continue;
+      const last = chips[k - 1].getBoundingClientRect().bottom - rowTop;
+      need = Math.max(need, Math.ceil(last + (chips.length > k ? more.offsetHeight + 3 : 0) + 6));
+    }
+    r.style.height = `${need}px`;
+    for (const { cell, more, chips } of cells) {
+      more.hidden = true;
+      if (cell.scrollHeight <= cell.clientHeight + 1) continue;
+      more.hidden = false;
+      let n = 0;
+      for (let i = chips.length - 1; i >= 0 && cell.scrollHeight > cell.clientHeight + 1; i--) { chips[i].hidden = true; more.textContent = `+${++n} more`; }
+    }
+  }
+}
+addEventListener('resize', () => fitMonth());
 
 function goToDay(d) { view.mode = 'day'; view.cursor = new Date(d); pref('mode', 'day'); render(); }
 
