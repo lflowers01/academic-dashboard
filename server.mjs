@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { buildItems, refreshDue, nextSlot, shortName, currentTerm, viewModel, digestItems, digestMessage, digestLink, boilerexamsKey, FEATURES } from './logic.mjs';
+import { buildItems, refreshDue, nextSlot, shortName, currentTerm, viewModel, digestItems, digestMessage, digestLink, boilerexamsKey, FEATURES, isVisible } from './logic.mjs';
 import { createGcal } from './gcal-routes.mjs';
 import { createSmart } from './smart-ann.mjs';
 
@@ -130,7 +130,9 @@ const gcal = createGcal({ state, readJson, writeJson, log, itemsOf: () => itemsO
 // ---------- view helpers ----------
 const coursesOf = raw => (raw?.courses || []).map(c => ({ id: c.id, name: c.name, code: c.code, short: shortName(c) }));
 // ---------- Smart Announcements (optional feature, smart-ann.mjs) ----------
-const smart = createSmart({ state, readJson, writeJson, log, announcements: () => cache?.raw?.announcements || [], courses: () => coursesOf(cache?.raw), itemsOf: () => brightspaceItems() });
+const smart = createSmart({ state, readJson, writeJson, log, announcements: () => cache?.raw?.announcements || [], courses: () => coursesOf(cache?.raw), itemsOf: () => brightspaceItems(),
+  // courses ticked in ⚙ Settings → Courses (same rule the page uses); announcements from the others are ignored
+  visibleCourses: () => { const list = coursesOf(cache?.raw); return new Set(list.filter(c => isVisible(c, brightspaceItems(), state, new Date(), currentTerm(list))).map(c => c.id)); } });
 
 const brightspaceItems = () => buildItems(cache?.raw || {});
 function itemsOf() {
@@ -343,7 +345,7 @@ const server = http.createServer(async (req, res) => {
       if (Array.isArray(b.seenAnnouncements)) state.seenAnnouncements = [...new Set([...state.seenAnnouncements, ...b.seenAnnouncements])];
       if (typeof b.notifications === 'boolean') state.notifications = b.notifications;
       for (const [k, v] of Object.entries(b.features || {})) if (FEATURES.some(f => f.id === k) && typeof v === 'boolean') state.features[k] = v; // unknown ids ignored
-      if (b.features) smart.tick(); // switching Smart Announcements on starts its first scan now, not at the next tick
+      if (b.features || b.hiddenCourses) smart.tick(); // Smart Announcements switched on, or a course ticked again → scan now, not at the next tick
       writeJson('state.json', state);
       return send(res, 200, state);
     }

@@ -59,6 +59,16 @@ async function run(browserName) {
       await page.click('#today'); await page.click('#modeMonth');
     });
 
+    await step('unticking a course in Settings → Courses hides its items from the card at once', async () => {
+      await page.click('#btnSettings'); await page.click('#settingsNav [data-sec=courses]');
+      const box = page.locator('#courseList label', { hasText: 'ENGL' }).locator('input[type=checkbox]');
+      await box.uncheck();
+      await page.waitForFunction(() => /2 to review/.test(document.querySelector('.smart-card')?.innerText || ''));
+      await box.check();
+      await page.waitForFunction(() => /3 to review/.test(document.querySelector('.smart-card')?.innerText || ''));
+      await page.keyboard.press('Escape');
+    });
+
     await step('Accept puts it on the calendar and the to-do list, marked as found', async () => {
       await page.locator('.smart-row', { hasText: 'Industrial Roundtable' }).locator('button', { hasText: 'Accept' }).click();
       await page.waitForFunction(() => /2 to review/.test(document.querySelector('.smart-card')?.innerText || ''));

@@ -160,3 +160,17 @@ test('failures are reported with a clear kind, and nothing is marked read', asyn
     } finally { await s.stop(); }
   }
 });
+
+test('announcements from courses unticked in Settings → Courses are ignored until the course is ticked again', async () => {
+  const s = await start();
+  try {
+    await s.post('/api/state', { hiddenCourses: { 104: true } }); // ENGL 106: its announcement is the career fair
+    await enable(s);
+    let d = await s.scanned();
+    assert.equal(d.smart.review.some(f => f.kind === 'optional'), false, 'nothing from the unticked course');
+    assert.equal(d.smart.pending, 0, 'and it is not waiting to be sent to Claude either');
+    await s.post('/api/state', { hiddenCourses: { 104: false } });
+    for (let i = 0; i < 50 && !(d = await s.data()).smart.review.some(f => f.kind === 'optional'); i++) await new Promise(r => setTimeout(r, 100));
+    assert.ok(d.smart.review.some(f => f.kind === 'optional' && f.courseId === 104), 'ticking it again reads its announcements');
+  } finally { await s.stop(); }
+});

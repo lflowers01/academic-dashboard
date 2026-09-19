@@ -95,14 +95,15 @@ async function extract(list) {
   });
 }
 
-export function createSmart({ state, readJson, writeJson, log, announcements, courses, itemsOf }) {
+export function createSmart({ state, readJson, writeJson, log, announcements, courses, itemsOf, visibleCourses }) {
   const store = { scanned: {}, found: [], lastRun: null, lastError: null, lastCostUsd: null, ...readJson('smart-ann.json', {}) };
   let running = false, lastAttempt = 0;
   const on = () => featureOn(state, 'smartAnnouncements');
   const save = () => writeJson('smart-ann.json', store);
   const posted = a => new Date(a.date || a.createdDate || 0);
-  const pending = (now = new Date()) => announcements()
-    .filter(a => !store.scanned[a.id] && posted(a) >= addDays(now, -SMART_DAYS) && (!a.startDate || new Date(a.startDate) <= now));
+  // unticked courses (⚙ Settings → Courses) are ignored: not sent to Claude, nothing shown; ticked again → scanned then
+  const pending = (now = new Date(), shown = visibleCourses()) => announcements()
+    .filter(a => shown.has(a.courseId) && !store.scanned[a.id] && posted(a) >= addDays(now, -SMART_DAYS) && (!a.startDate || new Date(a.startDate) <= now));
   const over = f => new Date(`${f.date}T${f.end || f.start || '23:59'}`) < new Date();
 
   async function scan(reason) {
@@ -202,7 +203,7 @@ export function createSmart({ state, readJson, writeJson, log, announcements, co
     items: () => (on() ? smartItems(store.found) : []),
     payload: () => on() ? {
       running, lastRun: store.lastRun, lastError: store.lastError, lastCostUsd: store.lastCostUsd, pending: pending().length,
-      review: store.found.filter(f => f.status === 'review' && !over(f)),
+      review: (shown => store.found.filter(f => f.status === 'review' && !over(f) && shown.has(f.courseId)))(visibleCourses()),
       counts: { added: store.found.filter(f => f.status === 'added').length, declined: store.found.filter(f => f.status === 'declined').length },
     } : null,
   };

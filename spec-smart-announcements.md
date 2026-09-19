@@ -7,7 +7,7 @@ automatically**; everything else waits in a **Review** card for Accept / Edit / 
 review card at the top of the To-do column; on enable, scan the last 14 days once.
 
 ## 1. What it reads, and how
-- **Input:** announcements posted in the **last 14 days** that haven't been scanned yet (so enabling it backfills
+- **Input:** announcements posted in the **last 14 days**, from courses ticked in ⚙ Settings → Courses, that haven't been scanned yet (an unticked course is never sent to Claude and its found events are hidden; ticking it again scans it right away) (so enabling it backfills
   14 days once, then each 3-hour refresh only sends new ones). Title + body as plain text (HTML stripped,
   max 4 000 characters each), course short name, posted date. At most 15 announcements per run; more → several runs.
 - **How:** one headless `claude -p` run (Haiku) with **no tools at all** (`--tools ""`, `--strict-mcp-config`),

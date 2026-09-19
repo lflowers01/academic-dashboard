@@ -22,9 +22,9 @@ async function decide(id, action, fields) {
 
 // ---------- review card ----------
 let open = D.pref('sreview') !== 'closed';
-hooks.todoTop.push(() => {
-  if (!on() || !S().review.length) return null;
-  const list = S().review;
+hooks.todoTop.push(m => {
+  const list = on() ? S().review.filter(f => m.visible.has(f.courseId)) : []; // unticking a course hides its items at once
+  if (!list.length) return null;
   return h('section', { class: 'today-strip smart-card' },
     h('button', { type: 'button', class: 'strip-head', 'aria-expanded': open, onclick: () => { open = !open; D.pref('sreview', open ? 'open' : 'closed'); D.render(); } },
       h('span', {}, open ? '▾' : '▸'), h('strong', {}, 'Found in announcements'), h('span', { class: 'muted' }, ` · ${list.length} to review`)),
