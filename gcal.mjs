@@ -61,12 +61,16 @@ async function run({ prompt, tools, maxTurns }) {
   const cmd = await resolveClaude();
   if (!cmd) throw new GcalError('no-claude', 'Claude Code is not installed (the `claude` command was not found).');
   fs.mkdirSync(CWD, { recursive: true });
-  const args = [...cmd.slice(1), '-p', prompt, '--model', MODEL, '--output-format', 'stream-json', '--verbose',
+  // The prompt goes in through stdin, never the command line: it can hold text the user typed (event titles), and
+  // with an npm-installed claude.cmd the command line passes through cmd.exe, where & | ^ would be special.
+  const args = [...cmd.slice(1), '-p', '--model', MODEL, '--output-format', 'stream-json', '--verbose',
     '--max-turns', String(maxTurns), '--allowedTools', ['ToolSearch', ...tools.map(t => T + t)].join(','),
     '--settings', '{"disableAllHooks":true}', '--disable-slash-commands'];
   return new Promise((resolve, reject) => {
     const child = spawn(cmd[0], args, { cwd: CWD, env: { ...process.env, MAX_MCP_OUTPUT_TOKENS: '200000' }, // a full page (250 events) is ~85k tokens; the default 25k cap refuses it
-    windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+    windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'] });
+    child.stdin.on('error', () => {}); // it may exit before reading
+    child.stdin.end(prompt);
     let out = '', errText = '', done = false;
     const timer = setTimeout(() => { if (!done) { done = true; killTree(child.pid); reject(new GcalError('timeout', `Claude didn't finish within ${TIMEOUT / 1000} s.`)); } }, TIMEOUT);
     child.stdout.on('data', d => { out += d; });
@@ -117,6 +121,11 @@ export function parseStream(out, errText = '') {
   return { calls: [...calls.values()], cost: Number(final.total_cost_usd) || 0 };
 }
 
+// A tool call that failed: Google's refusal, or Claude Code rejecting malformed arguments (kind 'invalid', retried once).
+const malformed = call => !!call?.isError && /InputValidationError/.test(call.resultText || '');
+const refused = call => new GcalError(malformed(call) ? 'invalid' : 'google',
+  `Google Calendar refused: ${String(call.resultText || 'no result').slice(0, 200)}`);
+
 // ---------- a tiny queue: one run at a time, writes before syncs ----------
 const queue = [];
 let busy = false;
@@ -131,7 +140,9 @@ async function pump() {
   if (busy || !queue.length) return;
   busy = true;
   const { job, resolve, reject } = queue.shift();
-  try { resolve(await job()); } catch (e) { reject(e); } finally { busy = false; pump(); }
+  // A malformed tool call (Haiku occasionally sends broken JSON) is rejected by Claude Code before it reaches Google,
+  // so running the job again is safe even for writes.
+  try { resolve(await job().catch(e => (e.kind === 'invalid' ? job() : Promise.reject(e)))); } catch (e) { reject(e); } finally { busy = false; pump(); }
 }
 export const isBusy = () => busy || queue.length > 0;
 
@@ -141,9 +152,10 @@ function checkedCall(calls, name, expected, keys) {
   const call = calls.find(c => c.name === name && keys.every(k => same(c.input[k], expected[k])));
   if (!call) {
     const other = calls.find(c => c.name === name);
+    if (malformed(other)) throw refused(other);
     throw new GcalError('agent', other ? `Claude called ${name} with different arguments than asked; nothing was trusted.` : `Claude didn't make the ${name} call.`);
   }
-  if (call.isError || !call.result) throw new GcalError('google', `Google Calendar refused: ${String(call.resultText || 'no result').slice(0, 200)}`);
+  if (call.isError || !call.result) throw refused(call);
   return call.result;
 }
 
@@ -172,8 +184,8 @@ export function listEvents(requests) {
       const next = [];
       for (const a of pending) {
         const call = r.calls.find(c => c.name === 'list_events' && ['calendarId', 'startTime', 'endTime', 'pageToken'].every(k => same(c.input[k], a[k])));
-        if (!call) throw new GcalError('agent', `Claude didn't read the calendar ${a.calendarId}.`);
-        if (call.isError || !call.result) throw new GcalError('google', `Google Calendar refused: ${String(call.resultText || '').slice(0, 200)}`);
+        if (!call) { const bad = r.calls.find(c => c.name === 'list_events' && malformed(c)); throw bad ? refused(bad) : new GcalError('agent', `Claude didn't read the calendar ${a.calendarId}.`); }
+        if (call.isError || !call.result) throw refused(call);
         byCalendar[a.calendarId].push(...(call.result.events || []));
         if (call.result.nextPageToken) next.push({ ...a, pageToken: call.result.nextPageToken });
       }
@@ -201,7 +213,7 @@ export function deleteEvent(args) {
     const { calls, cost } = await run({ prompt: `Call the tool ${T}delete_event exactly once with exactly these arguments, unchanged: ${JSON.stringify(args)}. ${only('delete_event')}`, tools: ['delete_event'], maxTurns: 5 });
     const call = calls.find(c => c.name === 'delete_event' && same(c.input.calendarId, args.calendarId) && same(c.input.eventId, args.eventId));
     if (!call) throw new GcalError('agent', "Claude didn't make the delete call.");
-    if (call.isError) throw new GcalError('google', `Google Calendar refused: ${String(call.resultText || '').slice(0, 200)}`);
+    if (call.isError) throw refused(call);
     return { ok: true, cost };
   });
 }

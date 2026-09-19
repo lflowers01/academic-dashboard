@@ -11,7 +11,7 @@ const MODE = process.env.FAKE_GCAL_MODE || 'ok';
 const FILE = process.env.FAKE_GCAL_STATE || path.join(os.tmpdir(), 'academic-dashboard-fake-gcal.json');
 const PAGE = Number(process.env.FAKE_GCAL_PAGE) || 250;
 const args = process.argv.slice(2);
-const prompt = args[args.indexOf('-p') + 1] || '';
+const prompt = fs.readFileSync(0, 'utf8'); // like the real bridge sends it: on stdin
 const emit = o => process.stdout.write(JSON.stringify(o) + '\n');
 
 
@@ -53,6 +53,14 @@ function main() {
 
   const name = (prompt.match(/Call the tool mcp__claude_ai_Google_Calendar__(\w+)/) || [])[1];
   let n = 0;
+  // malformedonce: the first run sends a broken tool call that Claude Code rejects (as Haiku occasionally does)
+  if (MODE === 'malformedonce' && !fs.existsSync(FILE + '.malformed')) {
+    fs.writeFileSync(FILE + '.malformed', '1');
+    emit({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'toolu_bad', name: T + name, input: {} }] } });
+    emit({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'toolu_bad', is_error: true, content: `<tool_use_error>InputValidationError: ${T + name} was called with input that could not be parsed as JSON.</tool_use_error>` }] } });
+    emit({ type: 'result', subtype: 'success', is_error: false, total_cost_usd: 0.01, result: 'DONE' });
+    return;
+  }
   const call = (tool, input, result, isError = false) => {
     const id = `toolu_${++n}`;
     emit({ type: 'assistant', message: { content: [{ type: 'tool_use', id, name: T + tool, input }] } });

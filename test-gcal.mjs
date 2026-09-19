@@ -149,6 +149,17 @@ test('large results saved to a file by Claude Code are read in full, and the run
   } finally { await s.stop(); fs.rmSync(cfg, { recursive: true, force: true }); }
 });
 
+test('a malformed tool call (rejected before reaching Google) is retried once', async () => {
+  const s = await start({ mode: 'malformedonce' });
+  try {
+    await enable(s);
+    await s.post('/api/gcal/connect');
+    const d = await s.idle();
+    assert.equal(d.gcal.lastError, null);
+    assert.equal(d.gcal.calendars.length, 3);
+  } finally { await s.stop(); }
+});
+
 test('safety: wrong arguments are rejected; failures are reported with a clear kind', async () => {
   for (const [mode, kind, re] of [['wrongargs', 'agent', /different arguments|didn't read/], ['refuse', 'google', /refused/], ['notloggedin', 'auth', /not signed in/], ['noconnector', 'no-connector', /not connected/]]) {
     const s = await start({ mode });
