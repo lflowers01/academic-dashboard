@@ -166,6 +166,20 @@ async function run(browserName) {
       assert.equal(tasks.length, 0);
     });
 
+    await step('arrow keys: ←/→ move the calendar, ↑/↓ switch Month/Week/Day', async () => {
+      const mode = () => page.$eval('[id^=mode][aria-pressed=true]', b => b.id);
+      await page.click('#modeMonth'); await page.click('#today'); await page.locator('body').click({ position: { x: 5, y: 5 } });
+      const title = () => page.innerText('#calTitle');
+      const now = await title();
+      await page.keyboard.press('ArrowRight'); assert.notEqual(await title(), now);
+      await page.keyboard.press('ArrowLeft'); assert.equal(await title(), now);
+      await page.keyboard.press('ArrowDown'); assert.equal(await mode(), 'modeWeek');
+      await page.keyboard.press('ArrowDown'); assert.equal(await mode(), 'modeDay');
+      await page.keyboard.press('ArrowDown'); assert.equal(await mode(), 'modeDay', 'stops at Day');
+      await page.keyboard.press('ArrowUp'); await page.keyboard.press('ArrowUp'); await page.keyboard.press('ArrowUp');
+      assert.equal(await mode(), 'modeMonth', 'stops at Month');
+    });
+
     await step('check off and undo', async () => {
       const row = page.locator('#todoList .group.tomorrow .item').first();
       const title = await row.locator('.title').innerText();

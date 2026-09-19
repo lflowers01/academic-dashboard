@@ -751,6 +751,11 @@ document.addEventListener('keydown', e => {
   if (e.ctrlKey || e.metaKey || e.altKey || e.target.closest('input, textarea, select, dialog')) return;
   if (e.key === 'n') { e.preventDefault(); openTaskForm(null); }
   if (e.key === 't') $('#today').click();
+  // calendar: ←/→ go back/forward a month, week or day; ↑/↓ switch Month ↔ Week ↔ Day
+  if (view.tab !== 'cal' || e.shiftKey) return;
+  const modes = ['month', 'week', 'day'], to = modes[modes.indexOf(view.mode) + (e.key === 'ArrowDown' ? 1 : -1)];
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); $(e.key === 'ArrowLeft' ? '#prev' : '#next').click(); }
+  if (e.key === 'ArrowUp' || e.key === 'ArrowDown') { e.preventDefault(); if (to) $(`#mode${to[0].toUpperCase()}${to.slice(1)}`).click(); }
 });
 
 // Links from notifications: #item=<id> opens that item; #due=<id>,<id> highlights those rows.

@@ -436,9 +436,9 @@ export const sundayOf = d => { d = startOfDay(d); return addDays(d, -d.getDay())
 export const GCAL_WINDOW = { back: 7, ahead: 42 }; // days around today that a sync reads
 export const FEATURES = [
   { id: 'googleCalendar', name: 'Google Calendar', description: `See and manage events from Google calendars you choose, next to your Brightspace work. Syncs events from ${GCAL_WINDOW.back / 7} week back to ${GCAL_WINDOW.ahead / 7} weeks ahead; other months load when you ask. Uses the Google Calendar connector in Claude (Claude Code required).` },
-  { id: 'grades', name: 'Grades', beta: true, description: 'A Grades tab with each class\'s grade worked out the way its syllabus says (weights or points), what-ifs, and "what do I need on the final". Leaves out Brightspace\'s category totals, which count work not graded yet as 0. Works without Claude; Syllabus scan fills in the grading schemes.' },
   { id: 'syllabusScan', name: 'Syllabus scan', description: 'Reads each class\'s syllabus (from Brightspace, or files you add) and puts its exams and deadlines on your calendar, the same careful way Smart Announcements does. It also reads the grading scheme for the Grades tab. Uses Claude (Claude Code required).' },
   { id: 'smartAnnouncements', name: 'Smart Announcements', description: 'Finds dated events in new announcements (review sessions, help rooms, exams, deadlines, class changes). Class events it is sure about are added to your calendar; the rest wait for you to accept, edit or decline. Uses Claude (Claude Code required).' },
+  { id: 'grades', name: 'Grades', beta: true, description: 'A Grades tab with each class\'s grade worked out the way its syllabus says (weights or points), what-ifs, and "what do I need on the final". Leaves out Brightspace\'s category totals, which count work not graded yet as 0. Works without Claude; Syllabus scan fills in the grading schemes.' },
 ];
 export const featureOn = (state, id) => state?.features?.[id] === true && FEATURES.some(f => f.id === id);
 
@@ -576,6 +576,25 @@ export function sameEvent(a, b, lenient = false) {
   return shared / Math.max(1, x.size, y.size) >= 0.75;
 }
 
+// Everything already on the calendar, in sameEvent's shape, so a scan never adds a second copy: Brightspace items
+// (announced exams included), the other feature's finds, the student's own tasks, and Google events. A task or Google
+// event without a class counts for the class its title names ("CHM 115 Exam 1"); one that names none can't be matched.
+export function onCalendar({ items = [], tasks = [], google = [], shortById = {} }) {
+  const hm = d => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  const named = t => { const k = titleCourseKey(t); return k ? Object.keys(shortById).filter(id => shortCourseKey(shortById[id]) === k).map(Number) : []; };
+  const out = items.filter(i => i.due).map(i => ({ courseId: i.courseId, date: dayKey(i.due), title: i.title, exam: !!i.exam, start: i.allDay ? null : hm(new Date(i.due)) }));
+  for (const t of tasks) for (const courseId of t.courseId ? [t.courseId] : named(t.title))
+    for (const date of new Set([t.date, t.endDate || t.date])) out.push({ courseId, date, title: t.title, exam: !!t.exam || isExamName(t.title), start: t.time || null });
+  for (const e of google) for (const courseId of named(e.title))
+    for (const date of eventDays(e)) out.push({ courseId, date, title: e.title, exam: isExamName(e.title), start: e.allDay || date !== dayKey(e.start) ? null : hm(new Date(e.start)) });
+  return out;
+}
+// A found event that's already there (`existing` from onCalendar) or already found: an exam that class already has
+// that day, or the same event by sameEvent.
+export const alreadyThere = (f, existing, found = []) =>
+  (f.kind === 'exam' && existing.some(x => x.exam && x.courseId === f.courseId && x.date === f.date))
+  || existing.some(x => sameEvent(x, f, true)) || found.some(x => sameEvent(x, f));
+
 // Where a checked event goes. Only sure events from this term's classes are added without asking. A deadline is also
 // held for review when the same course already has a found deadline that day: two announcements often word one
 // deadline differently ("Unit 1 coursework deadline" / "Complete remaining Unit 1 work"), and title words can't tell
@@ -590,8 +609,9 @@ export function smartStatus(f, found, isClass) {
 }
 
 // Added / accepted found events → dashboard items (kind 'event').
-export function smartItems(found) {
-  return found.filter(f => f.status === 'added').map(f => {
+// `mine`: the student's own tasks (onCalendar shape). A found event they also added by hand shows once, as their task.
+export function smartItems(found, mine = []) {
+  return found.filter(f => f.status === 'added' && !alreadyThere(f, mine)).map(f => {
     const at = hm => { const d = dateOnly(f.date); if (hm) { const [h, m] = hm.split(':').map(Number); d.setHours(h, m, 0, 0); } else d.setHours(23, 59, 0, 0); return d; };
     return {
       id: f.id, courseId: f.courseId, kind: 'event', eventKind: f.kind, exam: f.kind === 'exam', title: f.title,

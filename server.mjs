@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { buildItems, refreshDue, nextSlot, shortName, currentTerm, viewModel, digestItems, digestMessage, digestLink, boilerexamsKey, FEATURES, isVisible, htmlToText, featureOn, cleanGradeConfig, courseTerm } from './logic.mjs';
+import { buildItems, refreshDue, nextSlot, shortName, currentTerm, viewModel, digestItems, digestMessage, digestLink, boilerexamsKey, FEATURES, isVisible, htmlToText, featureOn, cleanGradeConfig, courseTerm, onCalendar } from './logic.mjs';
 import { createGcal } from './gcal-routes.mjs';
 import { createSmart } from './smart-ann.mjs';
 import { createSyllabus } from './syllabus.mjs';
@@ -138,13 +138,13 @@ const CHECK_UPDATES = process.env.DASH_UPDATE_API || (!FIXTURE && !process.env.D
 // ---------- view helpers ----------
 const coursesOf = raw => (raw?.courses || []).map(c => ({ id: c.id, name: c.name, code: c.code, short: shortName(c) }));
 // ---------- Smart Announcements (optional feature, smart-ann.mjs) ----------
-const smart = createSmart({ state, readJson, writeJson, log, announcements: () => cache?.raw?.announcements || [], courses: () => coursesOf(cache?.raw), itemsOf: () => [...brightspaceItems(), ...syllabus.items()],
+const smart = createSmart({ state, readJson, writeJson, log, announcements: () => cache?.raw?.announcements || [], courses: () => coursesOf(cache?.raw), calendar: () => calendarWith(syllabus.items()), mine: () => myTasks(),
   // courses ticked in ⚙ Settings → Courses (same rule the page uses); announcements from the others are ignored
   visibleCourses: () => visibleCourses() });
 
 // ---------- Syllabus scan (optional feature, syllabus.mjs) ----------
 const syllabus = createSyllabus({ state, readJson, writeJson, log, dataDir: DATA, courses: () => coursesOf(cache?.raw),
-  itemsOf: () => [...brightspaceItems(), ...smart.items()], visibleCourses: () => visibleCourses(),
+  calendar: () => calendarWith(smart.items()), mine: () => myTasks(), visibleCourses: () => visibleCourses(),
   fetchSources: FIXTURE ? demoSyllabi : (ids, dir) => import('./brightspace.mjs').then(m => m.fetchSyllabusSources(ids, dir)) });
 // demo: fixtures/demo-syllabi/<courseId>.html, with {{+Nd}} turned into a date N days from today
 async function demoSyllabi(ids) {
@@ -160,6 +160,10 @@ async function demoSyllabi(ids) {
 function visibleCourses() { const list = coursesOf(cache?.raw); return new Set(list.filter(c => isVisible(c, brightspaceItems(), state, new Date(), currentTerm(list))).map(c => c.id)); }
 
 const brightspaceItems = () => buildItems(cache?.raw || {});
+// for the scanners' duplicate check (onCalendar in logic.mjs): what's on the calendar besides that feature's own finds
+const shortById = () => Object.fromEntries(coursesOf(cache?.raw).map(c => [c.id, c.short]));
+const calendarWith = found => onCalendar({ items: [...brightspaceItems(), ...found], tasks, google: gcal.payload()?.events || [], shortById: shortById() });
+const myTasks = () => onCalendar({ tasks, shortById: shortById() });
 function itemsOf() {
   return [...brightspaceItems(), ...smart.items(), ...syllabus.items()].map(i => ({ ...i, firstSeen: cache?.firstSeen?.[i.id] }));
 }

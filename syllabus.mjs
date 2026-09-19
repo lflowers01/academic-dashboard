@@ -7,13 +7,13 @@ import path from 'node:path';
 import { askClaude } from './claude-json.mjs';
 import { SYLLABUS_SYSTEM } from './syllabus-prompt.mjs';
 import { fileText, joinSources, SYLLABUS_TYPES } from './syllabus-text.mjs';
-import { featureOn, verifySyllabusEvent, verifyGrading, sameEvent, smartStatus, smartItems, eventFields, dayKey, courseTerm, currentTerm } from './logic.mjs';
+import { featureOn, verifySyllabusEvent, verifyGrading, alreadyThere, smartStatus, smartItems, eventFields, dayKey, courseTerm, currentTerm } from './logic.mjs';
 
 const TIMEOUT = Number(process.env.DASH_SYLLABUS_TIMEOUT) || 180_000;
 const RETRY_AFTER_FAIL = 30 * 60_000;
 const MAX_FILE = 15 * 1024 * 1024;
 
-export function createSyllabus({ state, readJson, writeJson, log, dataDir, courses, itemsOf, visibleCourses, fetchSources }) {
+export function createSyllabus({ state, readJson, writeJson, log, dataDir, courses, calendar, mine = () => [], visibleCourses, fetchSources }) {
   const store = { courses: {}, found: [], lastRun: null, lastError: null, lastCostUsd: null, ...readJson('syllabus.json', {}) };
   let running = false, lastAttempt = 0;
   const on = () => featureOn(state, 'syllabusScan');
@@ -56,16 +56,14 @@ export function createSyllabus({ state, readJson, writeJson, log, dataDir, cours
         const { body, cost: c1 } = await askClaude({ system: SYLLABUS_SYSTEM, name: 'syllabus', cmdVar: 'DASH_SYLLABUS_CMD', timeout: TIMEOUT,
           input: { course: c.short, year: now.getFullYear(), today: dayKey(now), text } });
         cost += c1;
-        // already on the calendar: Brightspace items, announced exams, Smart Announcements events, earlier finds
-        const pad = n => String(n).padStart(2, '0');
-        const existing = itemsOf().filter(i => i.due).map(i => ({ courseId: i.courseId, date: dayKey(i.due), title: i.title, exam: !!i.exam,
-          start: i.allDay ? null : `${pad(new Date(i.due).getHours())}:${pad(new Date(i.due).getMinutes())}` }));
+        // already on the calendar: Brightspace items, announced exams, Smart Announcements events, your tasks, Google
+        // events; and earlier finds
+        const existing = calendar();
         let added = 0, review = 0;
         for (const ev of Array.isArray(body.events) ? body.events : []) {
           const f = verifySyllabusEvent(ev, text, c.id, now);
           if (!f) continue;
-          if (f.kind === 'exam' && existing.some(x => x.exam && x.courseId === f.courseId && x.date === f.date)) continue;
-          if (existing.some(x => sameEvent(x, f, true)) || store.found.some(x => sameEvent(x, f))) continue;
+          if (alreadyThere(f, existing, store.found)) continue;
           const { sure, ...keep } = f;
           const st = smartStatus({ ...f, sure }, store.found, true);
           const n = Math.max(-1, ...store.found.filter(x => x.courseId === c.id).map(x => Number(x.id.split(':').pop()))) + 1;
@@ -142,7 +140,7 @@ export function createSyllabus({ state, readJson, writeJson, log, dataDir, cours
 
   return {
     handle, tick,
-    items: () => (on() ? smartItems(store.found) : []),
+    items: () => (on() ? smartItems(store.found, mine()) : []),
     // the grading scheme read from a class's syllabus, for the Grades feature (null when unknown or the feature is off)
     grading: id => (on() ? store.courses[id]?.grading || null : null),
     payload: () => {

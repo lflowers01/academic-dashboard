@@ -8,7 +8,7 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { verifyFound, sameEvent, smartItems, isDone } from './logic.mjs';
+import { verifyFound, sameEvent, smartItems, isDone, onCalendar, alreadyThere } from './logic.mjs';
 import { parseReply } from './smart-ann.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -67,6 +67,24 @@ test('sameEvent / smartItems / done rules', () => {
   assert.equal(new Date(i.due).getHours(), 19);
   assert.equal(isDone(i, {}, new Date('2026-09-22T12:00:00')), true, 'events are over once past');
   assert.equal(isDone({ ...i, eventKind: 'deadline' }, {}, new Date('2026-09-22T12:00:00')), false, 'deadlines wait to be checked off');
+});
+
+test('duplicates: tasks and Google events count as already on the calendar; your own task wins over a found copy', () => {
+  const shortById = { 101: 'MA 161', 102: 'CHM 115' };
+  const cal = onCalendar({ shortById,
+    items: [{ courseId: 101, title: 'Written HW 2', due: new Date(2030, 0, 7, 23, 59).toISOString() }],
+    tasks: [{ title: 'Exam 2', date: '2030-01-10', time: '20:00', courseId: 101, exam: true }, { title: 'CHM 115 lab practical', date: '2030-01-12' }, { title: 'Dentist', date: '2030-01-10' }],
+    google: [{ title: 'CHM 115 Exam 1 review', start: new Date(2030, 0, 9, 18).toISOString(), end: new Date(2030, 0, 9, 19).toISOString(), allDay: false }, { title: 'Gym', start: new Date(2030, 0, 9, 7).toISOString(), end: new Date(2030, 0, 9, 8).toISOString() }] });
+  assert.deepEqual(cal.map(x => [x.courseId, x.date, x.start]), [[101, '2030-01-07', '23:59'], [101, '2030-01-10', '20:00'], [102, '2030-01-12', null], [102, '2030-01-09', '18:00']], 'titles without a class are ignored');
+  const f = (courseId, title, date, start, kind = 'deadline') => ({ courseId, title, date, start, kind });
+  assert.ok(alreadyThere(f(101, 'Midterm 2', '2030-01-10', '20:00', 'exam'), cal), 'your exam task that day');
+  assert.ok(alreadyThere(f(101, 'Written homework 2', '2030-01-07', '23:59'), cal), 'a Brightspace item');
+  assert.ok(alreadyThere(f(102, 'Exam 1 review session', '2030-01-09', '18:00', 'review'), cal), 'a Google event naming the class');
+  assert.ok(alreadyThere(f(102, 'Lab practical', '2030-01-12', null), cal), 'a task whose title names the class');
+  assert.ok(!alreadyThere(f(101, 'Quiz 3', '2030-01-10', '20:00'), cal.filter(x => !x.exam)), 'different things stay');
+  const found = [{ id: 'sy:101:0', courseId: 101, kind: 'exam', title: 'Exam 2', date: '2030-01-10', start: '20:00', status: 'added', quote: 'x' }];
+  assert.equal(smartItems(found).length, 1);
+  assert.equal(smartItems(found, onCalendar({ tasks: [{ title: 'Exam 2', date: '2030-01-10', courseId: 101, exam: true }] })).length, 0, 'shown once, as your task');
 });
 
 test('parseReply: tolerant of chatty wrapping, strict about the result', () => {

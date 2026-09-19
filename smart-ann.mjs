@@ -5,7 +5,7 @@
 // Announcements are untrusted: the model gets no tools, the text goes in through stdin (never a command line), and
 // nothing it returns is used until verifyFound (logic.mjs) has checked it against the announcement itself.
 import { askClaude, parseJsonReply, ClaudeError } from './claude-json.mjs';
-import { featureOn, annText, verifyFound, sameEvent, smartItems, smartStatus, eventFields, SMART_DAYS, addDays, dayKey, courseTerm, currentTerm } from './logic.mjs';
+import { featureOn, annText, verifyFound, alreadyThere, smartItems, smartStatus, eventFields, SMART_DAYS, addDays, dayKey, courseTerm, currentTerm } from './logic.mjs';
 
 const TIMEOUT = Number(process.env.DASH_SMART_TIMEOUT) || 120_000;
 const PER_RUN = 15;                 // announcements per run
@@ -42,7 +42,7 @@ async function extract(list) {
   return { events: body.events.filter(e => e && typeof e === 'object'), cost };
 }
 
-export function createSmart({ state, readJson, writeJson, log, announcements, courses, itemsOf, visibleCourses }) {
+export function createSmart({ state, readJson, writeJson, log, announcements, courses, calendar, mine = () => [], visibleCourses }) {
   const store = { scanned: {}, found: [], lastRun: null, lastError: null, lastCostUsd: null, ...readJson('smart-ann.json', {}) };
   // Once, for data from v1.4.0: a second auto-added deadline on the same course and day (a reworded repeat) goes back
   // to review, as smartStatus now decides. Events the student accepted are never touched.
@@ -79,16 +79,13 @@ export function createSmart({ state, readJson, writeJson, log, announcements, co
         cost += r.cost;
         const now = new Date();
         // What's already on the calendar: announcements often restate an assignment Brightspace already has, and the
-        // regular announcement-exam detection has its exams.
-        const pad = n => String(n).padStart(2, '0');
-        const existing = itemsOf().filter(i => i.due).map(i => ({ courseId: i.courseId, date: dayKey(i.due), title: i.title, exam: !!i.exam,
-          start: i.allDay ? null : `${pad(new Date(i.due).getHours())}:${pad(new Date(i.due).getMinutes())}` }));
+        // regular announcement-exam detection has its exams; also syllabus finds, your tasks, Google events.
+        const existing = calendar();
         for (const ev of r.events) {
           const ann = chunk.find(a => String(a.id) === String(ev.announcement));
           const f = verifyFound(ev, ann, now);
           if (!f) continue;
-          if (f.kind === 'exam' && existing.some(x => x.exam && x.courseId === f.courseId && x.date === f.date)) continue;
-          if (existing.some(x => sameEvent(x, f, true)) || store.found.some(x => sameEvent(x, f))) continue;
+          if (alreadyThere(f, existing, store.found)) continue;
           const i = store.found.filter(x => x.annId === f.annId).length;
           const { sure, ...keep } = f;
           const st = smartStatus({ ...f, sure }, store.found, isClass(f.courseId));
@@ -144,7 +141,7 @@ export function createSmart({ state, readJson, writeJson, log, announcements, co
 
   return {
     handle, tick,
-    items: () => (on() ? smartItems(store.found) : []),
+    items: () => (on() ? smartItems(store.found, mine()) : []),
     payload: () => on() ? {
       running, lastRun: store.lastRun, lastError: store.lastError, lastCostUsd: store.lastCostUsd, pending: pending().length,
       review: (shown => store.found.filter(f => f.status === 'review' && !over(f) && shown.has(f.courseId)))(visibleCourses()),
