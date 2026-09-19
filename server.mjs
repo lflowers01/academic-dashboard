@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { buildItems, refreshDue, nextSlot, shortName, currentTerm, viewModel, digestItems, digestMessage, digestLink, boilerexamsKey, FEATURES, isVisible } from './logic.mjs';
 import { createGcal } from './gcal-routes.mjs';
 import { createSmart } from './smart-ann.mjs';
+import { createUpdater, restartServer } from './update.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURE = process.argv.includes('--fixture');
@@ -127,6 +128,11 @@ const examIds = () => new Set(itemsOf().filter(i => i.exam).map(i => i.id));
 // ---------- Google Calendar (optional feature, gcal-routes.mjs) ----------
 const gcal = createGcal({ state, readJson, writeJson, log, itemsOf: () => itemsOf(), courses: () => coursesOf(cache?.raw) });
 
+// ---------- updates (always on, update.mjs) ----------
+const updater = createUpdater({ root: ROOT, dataDir: DATA, readJson, writeJson, log, onRestart: () => restartServer(ROOT, cb => server.close(cb)) });
+// demo and test servers don't ask GitHub (tests start many throwaway servers), unless a test points them at a fake
+const CHECK_UPDATES = process.env.DASH_UPDATE_API || (!FIXTURE && !process.env.DASH_MCP_CMD);
+
 // ---------- view helpers ----------
 const coursesOf = raw => (raw?.courses || []).map(c => ({ id: c.id, name: c.name, code: c.code, short: shortName(c) }));
 // ---------- Smart Announcements (optional feature, smart-ann.mjs) ----------
@@ -151,6 +157,10 @@ async function sendDigest(reason) {
   let msg = digestMessage(due, now, i => short[i.courseId] || '');
   const events = gcal.digestLine(now); // only when the user turned "include Google events" on
   if (events) msg = msg ? { ...msg, lines: [...msg.lines, events] } : { title: 'Today', lines: [events] };
+  // a new version is mentioned once, in the next digest (friends who rarely open the page still hear about it)
+  const newVersion = updater.available();
+  const updateLine = newVersion && state.updateNotified !== newVersion ? `Dashboard update available (v${newVersion}): open the dashboard to install it` : null;
+  if (updateLine) msg = msg ? { ...msg, lines: [...msg.lines, updateLine] } : { title: 'Academic Dashboard', lines: [updateLine] };
   if (!msg) return log(`digest (${reason}): nothing due today`);
   // Start-up and the first refresh happen together; don't send the same digest twice within 90 minutes.
   const sig = JSON.stringify(msg);
@@ -159,7 +169,7 @@ async function sendDigest(reason) {
   const { showToast } = await import('./toast.mjs');
   const r = await showToast(msg.title, msg.lines, digestLink(URL_SELF, due)); // click → opens those items
   log(`digest (${reason}): ${msg.title} → ${r.ok ? 'shown' : 'FAILED ' + r.error}`);
-  if (r.ok) { state.lastDigest = { sig, at: now.toISOString() }; writeJson('state.json', state); }
+  if (r.ok) { state.lastDigest = { sig, at: now.toISOString() }; if (updateLine) state.updateNotified = newVersion; writeJson('state.json', state); }
 }
 
 // ---------- refresh ----------
@@ -258,6 +268,7 @@ function payload() {
     boilerexams: Object.fromEntries(courses.map(c => [c.id, boilerexamsKey(c, boilerexams.courses)]).filter(([, k]) => k)),
     gcal: gcal.payload(), // null unless the Google Calendar feature is on
     smart: smart.payload(), // null unless Smart Announcements is on
+    update: updater.payload(),
   };
 }
 
@@ -344,6 +355,7 @@ const server = http.createServer(async (req, res) => {
       }
       if (Array.isArray(b.seenAnnouncements)) state.seenAnnouncements = [...new Set([...state.seenAnnouncements, ...b.seenAnnouncements])];
       if (typeof b.notifications === 'boolean') state.notifications = b.notifications;
+      if (b.updateSnooze === null || (b.updateSnooze && typeof b.updateSnooze.version === 'string')) state.updateSnooze = b.updateSnooze && { version: b.updateSnooze.version.slice(0, 20), until: new Date(Date.now() + 3 * 86400_000).toISOString() };
       for (const [k, v] of Object.entries(b.features || {})) if (FEATURES.some(f => f.id === k) && typeof v === 'boolean') state.features[k] = v; // unknown ids ignored
       if (b.features || b.hiddenCourses) smart.tick(); // Smart Announcements switched on, or a course ticked again → scan now, not at the next tick
       writeJson('state.json', state);
@@ -365,6 +377,7 @@ const server = http.createServer(async (req, res) => {
 
     if (await gcal.handle(req, res, p, { readBody, send })) return;
     if (await smart.handle(req, res, p, { readBody, send })) return;
+    if (await updater.handle(req, res, p, { readBody, send })) return;
 
     if (p === '/api/signin' && req.method === 'POST') {
       const { openSignInWindow } = await import('./brightspace.mjs');
@@ -388,8 +401,15 @@ const server = http.createServer(async (req, res) => {
 });
 server.requestTimeout = 6 * 60_000; // /api/refresh can legitimately take ~4 min
 
-server.on('error', e => { log(`server error: ${e.message}${e.code === 'EADDRINUSE' ? ` (port ${PORT} busy — is the dashboard already running?)` : ''}`); process.exit(1); });
+// After an in-app update the new server starts while the old one is still closing: wait for the port (up to 30 s).
+let portTries = 0;
+server.on('error', e => {
+  if (e.code === 'EADDRINUSE' && process.env.DASH_WAIT_PORT && portTries++ < 60) return setTimeout(() => server.listen(PORT, '127.0.0.1'), 500);
+  log(`server error: ${e.message}${e.code === 'EADDRINUSE' ? ` (port ${PORT} busy — is the dashboard already running?)` : ''}`); process.exit(1);
+});
 server.listen(PORT, '127.0.0.1', () => {
+  delete process.env.DASH_WAIT_PORT;
+  if (CHECK_UPDATES) { updater.tick(); setInterval(() => updater.tick(), 60 * 60_000); }
   log(`dashboard on ${URL_SELF}${FIXTURE ? ' (demo data)' : ''}`);
   checkNotifyBlock();
   refreshBoilerexams('start-up');

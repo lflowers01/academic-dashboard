@@ -63,6 +63,7 @@ const hooks = {
   settings: [],     // [{ id, title, visible: () → bool, render: container → void }]
   toolbar: [],      // (m) → [nodes] next to the calendar title
   legend: [],       // (m) → [nodes] added to the course legend
+  afterRender: [],  // () → void, after every render (e.g. the update pill)
 };
 const courseOf = i => courseById[i.courseId];
 const colorOf = i => courseOf(i)?.color || '#cbd5e1';
@@ -111,6 +112,7 @@ function render() {
   renderAnnouncements(m);
   renderNotifyButton();
   fitMonth(); // last: the legend and toolbar above can move the grid
+  for (const f of hooks.afterRender) f();
 }
 
 function renderStatus() {
@@ -774,7 +776,7 @@ async function loop() {
 }
 // Small API for optional feature modules (they load after this file and register into `hooks`).
 window.dash = {
-  hooks, h, api, render, patchState, calHidden, legendButton, reload: () => load(), openItem, openTaskForm, openSettings, showSettingsSection, linkNodes,
+  hooks, h, api, render, patchState, calHidden, legendButton, reload: () => load(), openItem, openTaskForm, openSettings, showSettingsSection, linkNodes, renderMarkdown,
   fmtTime, fmtDay, fmtFull, compactTime, tagText, colorOf, noteOf, dayKey, addDays, view, pref,
   get data() { return data; }, get model() { return lastModel; }, status: t => { $('#status').textContent = t; },
 };

@@ -77,6 +77,7 @@ When it's done, bookmark **http://localhost:4321**.
 | Show Google Calendar events (optional) | **⚙ Settings → Features → Google Calendar**, see below |
 | Put events from announcements on the calendar (optional) | **⚙ Settings → Features → Smart Announcements**, see below |
 | Update right now | **↻ Refresh** (about 2 minutes) |
+| Get the newest version of the dashboard | When there is one, **Update available** appears at the top; click it, then **Update now** (your data is kept) |
 
 **Colors:** each course has its own color. Urgency always appears as a labeled badge: red **OVERDUE** and orange **TODAY** (anything later just shows its date and time). **Gold = exam.** A dashed outline on the calendar means "**opens** at this time".
 

@@ -63,6 +63,8 @@ Tell them briefly:
 - Red "sign-in needed" banner → click **Sign in**, approve on the phone, then **↻ Refresh**.
 
 ## When the user asks to "update" the dashboard
+The dashboard updates itself: when a newer release exists, an **Update available** button appears in its header; **Update now** downloads the release, keeps `data\`, backs up the old files to `data\backup-v<old version>\`, and restarts. Point the user there first. Do it by hand (below) only if that fails, or if they ask you to.
+
 Latest release: https://github.com/lflowers01/academic-dashboard/releases/latest (asset `academic-dashboard.zip`). Their data lives in `data\` and must be kept.
 1. Compare `"version"` in this folder's `package.json` with the latest release's tag. If they match, say it's up to date and stop.
 2. Run `stop.cmd`.
@@ -87,7 +89,8 @@ Optional, off by default: ⚙ Settings → Features → Smart Announcements. Sam
 - The **Study on Boilerexams** button is automatic: the server fetches Boilerexams' course list (`api.boilerexams.com/courses`) on start-up, every 6 h, and whenever a new exam appears, then matches courses in `boilerexamsKey` (`logic.mjs`). Never hard-code a course list; if a course exists there, its exams get the button, otherwise none.
 - `npm test` must pass: `test.mjs` holds the unit tests, `test-server.mjs` runs the real server against `fixtures/fake-mcp.mjs`, `test-gcal.mjs` runs the Google bridge against `fixtures/fake-claude.mjs`, `test-smart.mjs` runs Smart Announcements against `fixtures/fake-smart.mjs`. Browser tests: `test-e2e.mjs`, `test-e2e-gcal.mjs`, `test-e2e-smart.mjs`. `npm run demo` serves fictional data from `data-demo/`.
 - `logic.mjs` is shared by the server, the browser and the tests (`viewModel`, status, exams, digest). Keep rules there, in one place.
-- Test hooks (env vars): `DASH_PORT`, `DASH_DATA`, `DASH_MCP_CMD` (JSON array command for a fake MCP server), `DASH_TOAST_LOG` (write notifications to a file), `DASH_NOTIFY_BLOCK` (pretend Windows blocks them), `DASH_TOTAL_TIMEOUT`, `DASH_COURSE_TIMEOUT`, `DASH_GCAL_CMD` (fake Claude runner), `DASH_GCAL_TIMEOUT`, `DASH_SMART_CMD`, `DASH_SMART_TIMEOUT`.
+- In-app updates live in `update.mjs` (checks the GitHub releases API daily; never updates a folder with `.git`). Tests: `test-update.mjs` does a real update of a throwaway copy against a fake GitHub.
+- Test hooks (env vars): `DASH_PORT`, `DASH_DATA`, `DASH_MCP_CMD` (JSON array command for a fake MCP server), `DASH_TOAST_LOG` (write notifications to a file), `DASH_NOTIFY_BLOCK` (pretend Windows blocks them), `DASH_TOTAL_TIMEOUT`, `DASH_COURSE_TIMEOUT`, `DASH_GCAL_CMD` (fake Claude runner), `DASH_GCAL_TIMEOUT`, `DASH_SMART_CMD`, `DASH_SMART_TIMEOUT`, `DASH_UPDATE_API` (fake releases API; also enables update checks in demo/test servers).
 - The page builds DOM with `h()` / `textContent` only. **Never** use `innerHTML` with Brightspace content (announcements, instructions and titles are external input). Notification text is XML-escaped and passed to PowerShell through environment variables, never interpolated into the command.
 - Theme: pure black, high contrast, neutral white accents (no blue UI chrome), Purdue logo top-left at 26px, gold `#cfb991` exams and favicon. Course colors come from `PALETTE` in `logic.mjs` (bright, black text, ≥ 7:1 contrast).
 - Windows only by design (cmd/npx, taskkill, PowerShell toasts, .vbs/.cmd launchers).

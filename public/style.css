@@ -14,6 +14,7 @@ button { background: var(--panel); border: 1px solid var(--line); border-radius:
 button:hover { background: var(--panel-2); }
 button.primary { background: #fff; border-color: #fff; color: #000; font-weight: 600; }
 button.primary:hover { background: #d9d9d9; }
+button:disabled { opacity: .45; cursor: not-allowed; }
 button.danger { color: var(--red); }
 :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 [hidden] { display: none !important; }
@@ -320,3 +321,15 @@ dialog.chooser { width: min(420px, calc(100vw - 32px)); }
 .smart-meta { font-size: 12px; margin-top: 2px; }
 .smart-actions { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
 .smart-actions button { font-size: 12px; padding: 3px 8px; }
+
+/* In-app updates */
+.update-pill { border-color: #cfb991; color: #cfb991; }
+.update-pill:hover { background: color-mix(in srgb, #cfb991 14%, transparent); }
+.settings-about { margin: 18px 0 0; padding-top: 10px; border-top: 1px solid var(--line); font-size: 12px; }
+.linklike { border: 0; background: none; padding: 0; color: var(--text); text-decoration: underline; font-size: inherit; cursor: pointer; }
+.update-dlg { max-width: 560px; }
+.update-notes { max-height: 280px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; margin: 10px 0; font-size: 13px; }
+.update-steps { list-style: none; padding: 0; margin: 12px 0; display: grid; gap: 6px; }
+.update-steps li { color: var(--muted); }
+.update-steps li.now { color: var(--text); font-weight: 600; }
+.update-steps li.done { color: var(--green); }
