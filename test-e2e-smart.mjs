@@ -36,7 +36,7 @@ async function run(browserName) {
   const card = () => page.locator('.smart-card');
   const toggle = async () => {
     await page.click('#btnSettings'); await page.click('#settingsNav [data-sec=features]');
-    await page.locator('#featureList .feature-row', { hasText: 'Smart Announcements' }).locator('input[type=checkbox]').click();
+    await page.getByRole('switch', { name: /^Smart Announcements/ }).click();
     await page.keyboard.press('Escape');
   };
   console.log(`smart announcements · ${browserName}:`);

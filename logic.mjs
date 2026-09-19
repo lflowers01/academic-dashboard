@@ -436,6 +436,7 @@ export const sundayOf = d => { d = startOfDay(d); return addDays(d, -d.getDay())
 export const GCAL_WINDOW = { back: 7, ahead: 42 }; // days around today that a sync reads
 export const FEATURES = [
   { id: 'googleCalendar', name: 'Google Calendar', description: `See and manage events from Google calendars you choose, next to your Brightspace work. Syncs events from ${GCAL_WINDOW.back / 7} week back to ${GCAL_WINDOW.ahead / 7} weeks ahead; other months load when you ask. Uses the Google Calendar connector in Claude (Claude Code required).` },
+  { id: 'syllabusScan', name: 'Syllabus scan', description: 'Reads each class\'s syllabus (from Brightspace, or files you add) and puts its exams and deadlines on your calendar, the same careful way Smart Announcements does. It also reads the grading scheme for the Grades tab. Uses Claude (Claude Code required).' },
   { id: 'smartAnnouncements', name: 'Smart Announcements', description: 'Finds dated events in new announcements (review sessions, help rooms, exams, deadlines, class changes). Class events it is sure about are added to your calendar; the rest wait for you to accept, edit or decline. Uses Claude (Claude Code required).' },
 ];
 export const featureOn = (state, id) => state?.features?.[id] === true && FEATURES.some(f => f.id === id);
@@ -448,8 +449,8 @@ export function localIso(d) {
   const off = -d.getTimezoneOffset(), sign = off >= 0 ? '+' : '-', a = Math.abs(off);
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}:00${sign}${pad2(Math.floor(a / 60))}:${pad2(a % 60)}`;
 }
-const htmlToText = s => String(s || '')
-  .replace(/<br\s*\/?>|<\/p>|<\/li>|<\/div>/gi, '\n').replace(/<[^>]*>/g, '')
+export const htmlToText = s => String(s || '')
+  .replace(/<br\s*\/?>|<\/p>|<\/li>|<\/div>|<\/h[1-6]>|<\/tr>/gi, '\n').replace(/<\/t[dh]>/gi, ' ').replace(/<[^>]*>/g, '')
   .replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&')
   .replace(/\n{3,}/g, '\n\n').trim();
 const dateOnly = s => { const [y, m, d] = s.slice(0, 10).split('-').map(Number); return new Date(y, m - 1, d); };
@@ -530,6 +531,10 @@ export const annText = a => `${a.title || ''}\n${htmlToText(a.body)}`.slice(0, 4
 const squash = t => String(t || '').toLowerCase().replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/\s+/g, ' ').trim();
 const HM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
+// What's missing that should stop an event being added without asking: the date, always; the time, for an exam (not a
+// quiz), a review session or a help session. A missing room never does ("Midterm 2, 8 PM" is worth adding without one).
+export const blocksAdding = (missing, kind, title) => missing.some(m => /^date$/i.test(m) || (/^time$/i.test(m) && ['exam', 'review', 'help'].includes(kind) && !/quiz/i.test(title || '')));
+
 // One suggestion from the model → a checked event, or null. The model read untrusted text, so nothing it says is
 // trusted: the quote must be in the announcement, the date must be real and near the posting, times well-formed.
 export function verifyFound(ev, ann, now = new Date()) {
@@ -552,7 +557,7 @@ export function verifyFound(ev, ann, now = new Date()) {
     title: String(ev.title || ann.title || 'Event').replace(/\s+/g, ' ').trim().slice(0, 120),
     date: ev.date, start, end, allDay: !start, location: String(ev.location || '').trim().slice(0, 120),
     quote: String(ev.quote).trim().slice(0, 500), missing,
-    sure: ev.confidence === 'high' && !missing.length && ev.kind !== 'optional',
+    sure: ev.confidence === 'high' && !blocksAdding(missing, ev.kind, ev.title) && ev.kind !== 'optional',
   };
 }
 
@@ -591,7 +596,83 @@ export function smartItems(found) {
       id: f.id, courseId: f.courseId, kind: 'event', eventKind: f.kind, exam: f.kind === 'exam', title: f.title,
       due: at(f.start).toISOString(), end: f.end ? at(f.end).toISOString() : null, allDay: !f.start, start: null,
       location: f.location || '', points: null, timeLimit: null, url: null, submitted: false, graded: false,
-      instructions: `From the announcement:\n“${f.quote}”`, sourceAnnouncement: f.annId,
+      source: f.source || 'announcement', // 'syllabus' events come from Syllabus scan
+      instructions: `From the ${f.source === 'syllabus' ? 'syllabus' : 'announcement'}:\n“${f.quote}”`, sourceAnnouncement: f.source === 'syllabus' ? null : f.annId,
     };
   });
+}
+
+// ---- Syllabus scan (optional feature; see spec-next-features.md §2) ----
+// Is `quote` really in `text`? Syllabi are PDFs whose tables come out of text extraction in odd orders, so the model's
+// quote may join pieces that aren't adjacent. Accept it when, ignoring case and punctuation, it's there verbatim, or
+// all of its words appear in order within a short stretch of the text. Invented quotes still fail.
+const plainWords = t => String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+export function quoteInText(quote, text) {
+  const q = plainWords(quote), hay = plainWords(text);
+  if (q.length < 6) return false;
+  if (hay.includes(q)) return true;
+  const words = q.split(' ');
+  if (words.length < 3) return false;
+  for (let from = hay.indexOf(words[0]); from >= 0; from = hay.indexOf(words[0], from + 1)) {
+    let at = from, ok = true;
+    for (const w of words.slice(1)) { at = hay.indexOf(w, at + 1); if (at < 0 || at - from > 400 + q.length) { ok = false; break; } }
+    if (ok) return true;
+  }
+  return false;
+}
+
+// One event suggested from a class's syllabus text → a checked event (same shape as verifyFound's), or null.
+export function verifySyllabusEvent(ev, text, courseId, now = new Date()) {
+  if (!ev || !SMART_KINDS.includes(ev.kind) || !quoteInText(ev.quote, text)) return null;
+  // "class-change" only for days without class; a regular session ("Workshop 5") is not an event
+  if (ev.kind === 'class-change' && !/\b(no (class|lecture|lab|recitation)|cancel|break|holiday|no school|not meet)/i.test(`${ev.title} ${ev.quote}`)) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ev.date || '')) return null;
+  const day = dateOnly(ev.date);
+  if (dayKey(day) !== ev.date || day > addDays(now, 300)) return null;
+  const HM = /^([01]\d|2[0-3]):[0-5]\d$/;
+  const start = HM.test(ev.start || '') ? ev.start : null;
+  const end = start && HM.test(ev.end || '') && ev.end > start ? ev.end : null;
+  const at = hm => { const d = new Date(day); const [h, m] = hm.split(':').map(Number); d.setHours(h, m, 0, 0); return d; };
+  const last = end ? at(end) : start ? at(start) : (() => { const d = new Date(day); d.setHours(23, 59, 0, 0); return d; })();
+  if (last < new Date(now)) return null; // already over
+  const missing = [...new Set((Array.isArray(ev.missing) ? ev.missing : []).map(String).filter(m => /^(date|time|location)$/i.test(m)))];
+  return {
+    annId: `syl:${courseId}`, courseId, kind: ev.kind, source: 'syllabus',
+    title: String(ev.title || 'Event').replace(/\s+/g, ' ').trim().slice(0, 120),
+    date: ev.date, start, end, allDay: !start, location: String(ev.location || '').trim().slice(0, 120),
+    quote: String(ev.quote).replace(/\s+/g, ' ').trim().slice(0, 500), missing,
+    sure: ev.confidence === 'high' && !blocksAdding(missing, ev.kind, ev.title) && ev.kind !== 'optional',
+  };
+}
+
+// The grading scheme the model read → checked, or null. Every component must be quoted from the text; weights are
+// percents (weighted) or points (points). The student still confirms it before Grades uses it.
+export function verifyGrading(g, text) {
+  if (!g || !['weighted', 'points'].includes(g.type)) return null;
+  const components = (Array.isArray(g.components) ? g.components : []).map(c => ({
+    name: String(c?.name || '').replace(/\s+/g, ' ').trim().slice(0, 60),
+    value: Number(g.type === 'weighted' ? c?.weight : c?.points),
+    ok: quoteInText(c?.quote || c?.name, text),
+  })).filter(c => c.name && c.ok && Number.isFinite(c.value) && c.value > 0 && (g.type === 'points' || c.value <= 100))
+    .map(({ name, value }) => ({ name, value }));
+  if (!components.length) return null;
+  const LETTER = /^[A-F][+-]?$/;
+  const scale = (Array.isArray(g.scale) ? g.scale : [])
+    .map(s => ({ letter: String(s?.letter || '').replace(/[−–]/g, '-').trim(), min: Number(s?.min) }))
+    .filter(s => LETTER.test(s.letter) && Number.isFinite(s.min) && s.min >= 0 && s.min <= 100)
+    .sort((a, b) => b.min - a.min);
+  return { type: g.type, components, scale, total: Math.round(components.reduce((s, c) => s + c.value, 0) * 100) / 100 };
+}
+
+// Fields the student typed when accepting/editing a found event (Smart Announcements, Syllabus scan) → checked values.
+export function eventFields(b, f) {
+  const title = String(b.title ?? f.title).replace(/\s+/g, ' ').trim().slice(0, 120);
+  const date = String(b.date ?? f.date);
+  const hm = v => (v === '' || v == null ? null : /^([01]\d|2[0-3]):[0-5]\d$/.test(v) ? v : undefined);
+  const start = 'start' in b ? hm(b.start) : f.start, end = 'end' in b ? hm(b.end) : f.end;
+  if (!title) throw Object.assign(new Error('A title is required.'), { status: 400 });
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || dayKey(new Date(`${date}T12:00`)) !== date) throw Object.assign(new Error('Pick a valid date.'), { status: 400 });
+  if (start === undefined || end === undefined) throw Object.assign(new Error('Times must look like 14:30.'), { status: 400 });
+  if (end && (!start || end <= start)) throw Object.assign(new Error('The end must be after the start.'), { status: 400 });
+  return { title, date, start, end, allDay: !start, location: String(b.location ?? f.location ?? '').trim().slice(0, 120), missing: [] };
 }

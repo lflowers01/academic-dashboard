@@ -7,7 +7,8 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { appendFileSync } from 'node:fs';
+import { appendFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { join } from 'node:path';
 
 const MODE = process.env.FAKE_MODE || 'ok';
 const log = x => process.env.FAKE_LOG && appendFileSync(process.env.FAKE_LOG, JSON.stringify(x) + '\n');
@@ -41,7 +42,7 @@ const announcements = [
 const text = v => ({ content: [{ type: 'text', text: typeof v === 'string' ? v : JSON.stringify(v) }] });
 const server = new Server({ name: 'fake-brightspace', version: '1.0.0' }, { capabilities: { tools: {} } });
 server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: ['get_my_courses', 'get_assignments', 'get_my_grades', 'get_announcements'].map(name => ({ name, inputSchema: { type: 'object' } })),
+  tools: ['get_my_courses', 'get_assignments', 'get_my_grades', 'get_announcements', 'get_syllabus', 'get_course_content', 'download_file'].map(name => ({ name, inputSchema: { type: 'object' } })),
 }));
 server.setRequestHandler(CallToolRequestSchema, async req => {
   const { name, arguments: args = {} } = req.params;
@@ -57,6 +58,21 @@ server.setRequestHandler(CallToolRequestSchema, async req => {
   }
   if (name === 'get_my_grades') return text({ courseId: args.courseId, grades: [] });
   if (name === 'get_announcements') return text(announcements);
+  // syllabus sources: MA 162's overview text has its midterm; CS 159 has a "Course Syllabus" file (HTML) with a project deadline and grading
+  const long = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }); };
+  if (name === 'get_syllabus') return text(args.courseId === 101
+    ? { courseId: 101, description: { markdown: 'Welcome to MA 16200!' }, syllabusText: `Midterm Exam 2 is on ${long(20)} from 8:00-9:00 PM in ELLT 116.\nGrading: Quizzes 20%, Midterms 45%, Final Exam 35%.` }
+    : { courseId: args.courseId, description: { markdown: '' }, syllabusText: '' });
+  if (name === 'get_course_content') return text(args.courseId === 102
+    ? { modules: [{ type: 'module', title: 'Start Here', children: [{ type: 'topic', topicType: 'file', title: 'Course Syllabus', topicId: 77 }, { type: 'topic', topicType: 'file', title: 'Lecture 1 slides', topicId: 78 }] }] }
+    : { modules: [] });
+  if (name === 'download_file') {
+    if (args.topicId !== 77) return { ...text('not found'), isError: true };
+    mkdirSync(args.downloadPath, { recursive: true });
+    const filePath = join(args.downloadPath, 'Course Syllabus.html');
+    writeFileSync(filePath, `<h1>CS 15900</h1><p>Project 2 is due ${long(12)} at 11:59 PM.</p><p>Projects 300 points, Exams 400 points, Labs 100 points.</p>`);
+    return text({ success: true, filePath, mimeType: 'text/html' });
+  }
   return { ...text('unknown tool'), isError: true };
 });
 await server.connect(new StdioServerTransport());

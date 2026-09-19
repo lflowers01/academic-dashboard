@@ -321,6 +321,8 @@ dialog.chooser { width: min(420px, calc(100vw - 32px)); }
 .smart-meta { font-size: 12px; margin-top: 2px; }
 .smart-actions { display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; }
 .smart-actions button { font-size: 12px; padding: 3px 8px; }
+.smart-bulk { padding: 8px 10px; border-top: 1px solid var(--line); text-align: right; }
+.smart-bulk button { font-size: 12px; }
 
 /* In-app updates */
 .update-pill { border-color: #cfb991; color: #cfb991; }
@@ -333,3 +335,11 @@ dialog.chooser { width: min(420px, calc(100vw - 32px)); }
 .update-steps li { color: var(--muted); }
 .update-steps li.now { color: var(--text); font-weight: 600; }
 .update-steps li.done { color: var(--green); }
+
+/* Syllabus scan */
+.syl-table td { vertical-align: top; font-size: 13px; }
+.syl-file { font-size: 12px; margin-top: 2px; }
+.syl-problem { font-size: 12px; margin-top: 4px; padding: 4px 8px; }
+.syl-drop { border: 1.5px dashed var(--line); border-radius: 10px; padding: 14px; margin: 12px 0; text-align: center; color: var(--muted); cursor: pointer; }
+.syl-drop:hover, .syl-drop.over { border-color: #cfb991; color: var(--text); }
+.syl-ask { margin: 6px 0; font-size: 13px; }

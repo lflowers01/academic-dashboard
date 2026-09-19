@@ -2,6 +2,8 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { execFile } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
 import { currentTerm, shouldFetch } from './logic.mjs';
 
 const PKG = 'brightspace-mcp-server@latest';
@@ -95,6 +97,37 @@ export function fetchAll(prev = {}) {
 // Quick connection test for setup: lists courses only (a few seconds when signed in).
 export function checkConnection() {
   return withClient(call => call('get_my_courses', { activeOnly: true }));
+}
+
+// Syllabus scan (optional feature): for each class, the course overview text plus up to 3 files whose titles look like
+// a syllabus or schedule, downloaded into dir/<courseId>/. A class that fails just gets fewer sources.
+// → { [courseId]: [{ name, text } | { name, file }] }
+const SYLLABUS_TITLE = /syllab|course (schedule|information|info|calendar)|schedule of|class schedule/i;
+export function fetchSyllabusSources(courseIds, dir) {
+  return withClient(async call => {
+    const out = {};
+    for (const id of courseIds) {
+      const sources = out[id] = [];
+      try {
+        const o = await call('get_syllabus', { courseId: id });
+        const text = [o?.syllabusText, o?.description?.markdown].filter(Boolean).join('\n\n').trim();
+        if (text.length > 40) sources.push({ name: 'Course overview (Brightspace)', text });
+      } catch {}
+      try {
+        const topics = [];
+        const walk = n => { if (Array.isArray(n)) n.forEach(walk); else if (n && typeof n === 'object') { if (n.topicType === 'file' && SYLLABUS_TITLE.test(n.title || '')) topics.push(n); for (const v of Object.values(n)) if (v && typeof v === 'object') walk(v); } };
+        walk(await call('get_course_content', { courseId: id, maxDepth: 4 }));
+        const target = path.join(dir, String(id));
+        fs.rmSync(target, { recursive: true, force: true });
+        fs.mkdirSync(target, { recursive: true });
+        for (const t of topics.slice(0, 3)) {
+          const r = await call('download_file', { courseId: id, topicId: t.topicId || t.id, downloadPath: target }).catch(() => null);
+          if (r?.filePath && fs.existsSync(r.filePath)) sources.push({ name: `${t.title} (Brightspace)`, file: r.filePath });
+        }
+      } catch {}
+    }
+    return out;
+  });
 }
 
 // Opens a visible terminal for number-matching MFA. Only ever called from a user click.

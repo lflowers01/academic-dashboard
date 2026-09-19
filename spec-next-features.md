@@ -88,6 +88,13 @@ asset URL. The release asset is `academic-dashboard.zip` containing one `academi
 same trust as installing it by hand, and the version check refuses a mismatched zip; running from a read-only or
 OneDrive-locked folder → the copy fails, nothing restarts, and the error says what to do.
 
+**As built (2026-09-19)** — differences from the plan above: the check uses the releases API only (one call a day is far
+under the limit); no Settings dot (it would fight the notifications dot; the header pill is enough); the restart starts
+`node server.mjs` detached with `DASH_WAIT_PORT=1`, and the new server retries the port for up to 30 s while the old one
+exits; a failure after copying restores the backup automatically; demo and test servers never call GitHub unless
+`DASH_UPDATE_API` points them at a fake. \`test-update.mjs\` performs a real update of a throwaway install (download →
+check → backup → copy → restart as the new version, ~5 s) and checks the refusals (mismatched version, git checkout).
+
 ---
 
 ## 2. Syllabus scan (optional feature)
@@ -122,6 +129,20 @@ the calendar the same careful way Smart Announcements does it, and each class's 
 - **Shared code with Smart Announcements:** the runner and the review card are reused, not copied.
 
 ---
+
+### As built (2026-09-19), and what the real-data runs changed
+Run end-to-end against a real Brightspace account and 7 real syllabi (on a throwaway data folder): 7 classes read in
+~3.5 min for ~$0.10–0.25, grading schemes for 5 of 7 classes (one weighted = 100%, four by points, with letter scales), and the calculus class's 3 midterms, final and 7 quizzes, chemistry's Exams 2–3, the engineering class's deadlines and the lab's
+no-lab weeks placed on the calendar; exams already known from announcements and deadlines already in Brightspace were skipped.
+- **Quotes from PDF tables** don't come out in reading order, so the syllabus quote check (`quoteInText`) accepts a quote whose
+  words all appear, in order, within a short stretch of the text (still no invented text).
+- **Regular sessions aren't events:** a "class-change" must say no class / cancelled / break (calculus listed 14 "Workshop N" rows).
+- **What blocks adding without asking** (`blocksAdding`, also used by Smart Announcements now): a missing date always; a
+  missing time only for exams (not quizzes), review and help sessions; a missing room never.
+- **Accept all** in the review card (both features) for long lists — a chemistry lab's syllabus has 18 prelab/report deadlines
+  that aren't in Brightspace.
+- Counts per class are current totals, not the last scan's additions.
+- The shared runner is `claude-json.mjs`; the prompt is `syllabus-prompt.mjs`.
 
 ## 3. Grades (optional feature)
 

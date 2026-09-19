@@ -3,15 +3,17 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { buildItems, refreshDue, nextSlot, shortName, currentTerm, viewModel, digestItems, digestMessage, digestLink, boilerexamsKey, FEATURES, isVisible } from './logic.mjs';
+import { buildItems, refreshDue, nextSlot, shortName, currentTerm, viewModel, digestItems, digestMessage, digestLink, boilerexamsKey, FEATURES, isVisible, htmlToText } from './logic.mjs';
 import { createGcal } from './gcal-routes.mjs';
 import { createSmart } from './smart-ann.mjs';
+import { createSyllabus } from './syllabus.mjs';
 import { createUpdater, restartServer } from './update.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURE = process.argv.includes('--fixture');
 // Demo mode: Google Calendar talks to a fake Claude so it works offline with made-up calendars.
 if (FIXTURE && !process.env.DASH_GCAL_CMD) process.env.DASH_GCAL_CMD = JSON.stringify([process.execPath, path.join(ROOT, 'fixtures', 'fake-claude.mjs')]);
+if (FIXTURE && !process.env.DASH_SYLLABUS_CMD) process.env.DASH_SYLLABUS_CMD = JSON.stringify([process.execPath, path.join(ROOT, 'fixtures', 'fake-syllabus.mjs')]); // demo's fake syllabus reader
 if (FIXTURE && !process.env.DASH_SMART_CMD) process.env.DASH_SMART_CMD = JSON.stringify([process.execPath, path.join(ROOT, 'fixtures', 'fake-smart.mjs')]); // demo's fake announcement reader
 // DASH_PORT / DASH_DATA exist for tests and for anyone whose port 4321 is taken.
 const PORT = Number(process.env.DASH_PORT) || 4321;
@@ -136,13 +138,30 @@ const CHECK_UPDATES = process.env.DASH_UPDATE_API || (!FIXTURE && !process.env.D
 // ---------- view helpers ----------
 const coursesOf = raw => (raw?.courses || []).map(c => ({ id: c.id, name: c.name, code: c.code, short: shortName(c) }));
 // ---------- Smart Announcements (optional feature, smart-ann.mjs) ----------
-const smart = createSmart({ state, readJson, writeJson, log, announcements: () => cache?.raw?.announcements || [], courses: () => coursesOf(cache?.raw), itemsOf: () => brightspaceItems(),
+const smart = createSmart({ state, readJson, writeJson, log, announcements: () => cache?.raw?.announcements || [], courses: () => coursesOf(cache?.raw), itemsOf: () => [...brightspaceItems(), ...syllabus.items()],
   // courses ticked in ⚙ Settings → Courses (same rule the page uses); announcements from the others are ignored
-  visibleCourses: () => { const list = coursesOf(cache?.raw); return new Set(list.filter(c => isVisible(c, brightspaceItems(), state, new Date(), currentTerm(list))).map(c => c.id)); } });
+  visibleCourses: () => visibleCourses() });
+
+// ---------- Syllabus scan (optional feature, syllabus.mjs) ----------
+const syllabus = createSyllabus({ state, readJson, writeJson, log, dataDir: DATA, courses: () => coursesOf(cache?.raw),
+  itemsOf: () => [...brightspaceItems(), ...smart.items()], visibleCourses: () => visibleCourses(),
+  fetchSources: FIXTURE ? demoSyllabi : (ids, dir) => import('./brightspace.mjs').then(m => m.fetchSyllabusSources(ids, dir)) });
+// demo: fixtures/demo-syllabi/<courseId>.html, with {{+Nd}} turned into a date N days from today
+async function demoSyllabi(ids) {
+  const out = {};
+  for (const id of ids) {
+    const f = path.join(ROOT, 'fixtures', 'demo-syllabi', `${id}.html`);
+    if (!fs.existsSync(f)) continue;
+    const html = fs.readFileSync(f, 'utf8').replace(/\{\{\+(\d+)d\}\}/g, (m, n) => { const d = new Date(); d.setDate(d.getDate() + Number(n)); return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }); });
+    out[id] = [{ name: 'Syllabus (demo)', text: htmlToText(html) }];
+  }
+  return out;
+}
+function visibleCourses() { const list = coursesOf(cache?.raw); return new Set(list.filter(c => isVisible(c, brightspaceItems(), state, new Date(), currentTerm(list))).map(c => c.id)); }
 
 const brightspaceItems = () => buildItems(cache?.raw || {});
 function itemsOf() {
-  return [...brightspaceItems(), ...smart.items()].map(i => ({ ...i, firstSeen: cache?.firstSeen?.[i.id] }));
+  return [...brightspaceItems(), ...smart.items(), ...syllabus.items()].map(i => ({ ...i, firstSeen: cache?.firstSeen?.[i.id] }));
 }
 
 // ---------- notifications ----------
@@ -192,7 +211,7 @@ async function doRefresh() {
     }
     cache = { raw, refreshedAt: now, firstSeen, failedCourses };
     writeJson('cache.json', cache);
-    pruneState([...items, ...smart.items()], raw.announcements || []); // found events keep their checkmarks too
+    pruneState([...items, ...smart.items(), ...syllabus.items()], raw.announcements || []); // found events keep their checkmarks too
     Object.assign(meta, { lastError: null, paused: false, retryIndex: 0, nextRetryAt: null });
     log(`refresh ok: ${items.length} items, ${failedCourses.length} course(s) failed`);
     // A new exam appeared → check Boilerexams now, not in up to 6 hours.
@@ -268,6 +287,7 @@ function payload() {
     boilerexams: Object.fromEntries(courses.map(c => [c.id, boilerexamsKey(c, boilerexams.courses)]).filter(([, k]) => k)),
     gcal: gcal.payload(), // null unless the Google Calendar feature is on
     smart: smart.payload(), // null unless Smart Announcements is on
+    syllabus: syllabus.payload(), // null unless Syllabus scan is on
     update: updater.payload(),
   };
 }
@@ -277,11 +297,11 @@ const send = (res, code, body, type = 'application/json; charset=utf-8') => {
   res.writeHead(code, { 'Content-Type': type, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
   res.end(type.startsWith('application/json') ? JSON.stringify(body) : body);
 };
-const readBody = req => new Promise((ok, fail) => {
+const readBody = (req, max = 1e6) => new Promise((ok, fail) => { // max: characters (syllabus uploads pass more)
   let s = '', tooBig = false;
   req.setEncoding('utf8');
-  // Past 1 MB: stop keeping the data but let the upload finish, so the client gets a real 413 instead of a reset.
-  req.on('data', c => { if (!tooBig) { s += c; if (s.length > 1e6) { tooBig = true; s = ''; } } });
+  // Past the limit (1 MB by default): stop keeping the data but let the upload finish, so the client gets a real 413 instead of a reset.
+  req.on('data', c => { if (!tooBig) { s += c; if (s.length > max) { tooBig = true; s = ''; } } });
   req.on('end', () => {
     if (tooBig) return fail(Object.assign(new Error('too large'), { status: 413 }));
     try { const v = s ? JSON.parse(s) : {}; ok(v && typeof v === 'object' ? v : {}); } catch { fail(Object.assign(new Error('bad json'), { status: 400 })); }
@@ -357,7 +377,7 @@ const server = http.createServer(async (req, res) => {
       if (typeof b.notifications === 'boolean') state.notifications = b.notifications;
       if (b.updateSnooze === null || (b.updateSnooze && typeof b.updateSnooze.version === 'string')) state.updateSnooze = b.updateSnooze && { version: b.updateSnooze.version.slice(0, 20), until: new Date(Date.now() + 3 * 86400_000).toISOString() };
       for (const [k, v] of Object.entries(b.features || {})) if (FEATURES.some(f => f.id === k) && typeof v === 'boolean') state.features[k] = v; // unknown ids ignored
-      if (b.features || b.hiddenCourses) smart.tick(); // Smart Announcements switched on, or a course ticked again → scan now, not at the next tick
+      if (b.features || b.hiddenCourses) { smart.tick(); syllabus.tick(); } // Smart Announcements switched on, or a course ticked again → scan now, not at the next tick
       writeJson('state.json', state);
       return send(res, 200, state);
     }
@@ -377,6 +397,7 @@ const server = http.createServer(async (req, res) => {
 
     if (await gcal.handle(req, res, p, { readBody, send })) return;
     if (await smart.handle(req, res, p, { readBody, send })) return;
+    if (await syllabus.handle(req, res, p, { readBody, send })) return;
     if (await updater.handle(req, res, p, { readBody, send })) return;
 
     if (p === '/api/signin' && req.method === 'POST') {
@@ -416,5 +437,6 @@ server.listen(PORT, '127.0.0.1', () => {
   setInterval(checkNotifyBlock, 5 * 60_000);
   gcal.tick(); setInterval(() => gcal.tick(), 60_000); // Google Calendar sync schedule (no-op while the feature is off)
   smart.tick(); setInterval(() => smart.tick(), 60_000); // scans new announcements (no-op while Smart Announcements is off)
+  syllabus.tick(); setInterval(() => syllabus.tick(), 60_000); // reads syllabi of classes not read yet (no-op while Syllabus scan is off)
   if (!FIXTURE) { tick(); setInterval(tick, 60_000); }
 });

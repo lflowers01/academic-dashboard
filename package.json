@@ -11,12 +11,13 @@
   },
   "scripts": {
     "start": "node server.mjs",
-    "test": "node --test test.mjs test-server.mjs test-gcal.mjs test-smart.mjs test-update.mjs",
+    "test": "node --test test.mjs test-server.mjs test-gcal.mjs test-smart.mjs test-syllabus.mjs test-update.mjs",
     "demo": "node server.mjs --fixture",
     "check": "node check.mjs",
     "e2e": "node test-e2e.mjs"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.30.0"
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "unpdf": "1.8.1"
   }
 }

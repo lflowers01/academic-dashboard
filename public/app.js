@@ -33,6 +33,7 @@ function fmtAgo(d) {
 }
 // Found in an announcement: announced exams, and events from the Smart Announcements feature. They have a start–end, not a due date.
 const announced = i => i.kind === 'exam' || i.kind === 'event';
+const foundIn = i => (i.source === 'syllabus' ? 'syllabus' : 'announcement'); // where a found event came from
 const EVENT_KIND = { exam: 'Exam', review: 'Review session', help: 'Help session', deadline: 'Deadline', 'class-change': 'Class change', optional: 'Event' };
 const dueLabel = i => (i.allDay ? 'all day' : i.end && announced(i) ? `${fmtTime(i.due)}–${fmtTime(i.end)}` : fmtTime(i.due));
 const rangeLabel = i => `${fmtDay(i.rangeStart)} – ${fmtDay(i.due)}${i.allDay ? '' : ' ' + fmtTime(i.due)}`;
@@ -167,8 +168,8 @@ function renderTabs() {
 // ----- to-do -----
 function itemRow(i, { showDay = false } = {}) {
   const badges = [];
-  if (i.exam) badges.push(h('span', { class: 'badge b-exam' }, announced(i) ? 'EXAM · from announcement' : 'EXAM'));
-  else if (i.kind === 'event') badges.push(h('span', { class: 'badge b-found', title: 'Found in an announcement' }, `✦ ${EVENT_KIND[i.eventKind] || 'Event'} · from announcement`));
+  if (i.exam) badges.push(h('span', { class: 'badge b-exam' }, announced(i) ? `EXAM · from ${foundIn(i)}` : 'EXAM'));
+  else if (i.kind === 'event') badges.push(h('span', { class: 'badge b-found', title: `Found in ${foundIn(i) === 'syllabus' ? 'the syllabus' : 'an announcement'}` }, `✦ ${EVENT_KIND[i.eventKind] || 'Event'} · from ${foundIn(i)}`));
   if (i.rangeStart && !i.done && i.st !== 'overdue') { if (i.st !== 'today') badges.push(h('span', { class: 'badge b-info' }, rangeLabel(i))); } // under Today, a running range needs no badge
   else if (i.st === 'overdue') badges.push(h('span', { class: 'badge b-overdue' }, `⚠ OVERDUE · ${fmtDay(i.due)}`));
   else if (i.st === 'today') badges.push(h('span', { class: 'badge b-today' }, `TODAY ${dueLabel(i)}`));
@@ -458,7 +459,7 @@ function openItem(i) {
   if (i.kind === 'task') return openTaskForm(data.tasks.find(t => t.id === i.id));
   const rows = [
     ['Course', courseOf(i)?.name || ''],
-    ['Type', i.kind === 'exam' ? 'Exam (found in an announcement)' : i.kind === 'event' ? `${EVENT_KIND[i.eventKind] || 'Event'} (found in an announcement)` : `${i.kind === 'quiz' ? 'Quiz' : 'Assignment'}${i.exam ? ' · exam' : ''}`],
+    ['Type', i.kind === 'exam' ? 'Exam (found in an announcement)' : i.kind === 'event' ? `${EVENT_KIND[i.eventKind] || 'Event'} (found in ${foundIn(i) === 'syllabus' ? 'the syllabus' : 'an announcement'})` : `${i.kind === 'quiz' ? 'Quiz' : 'Assignment'}${i.exam ? ' · exam' : ''}`],
     i.due && [announced(i) && i.eventKind !== 'deadline' ? 'When' : 'Due', announced(i) ? `${i.allDay ? fmtDay(i.due) + ' · all day' : fmtFull(i.due)}${i.end ? ' – ' + fmtTime(i.end) : ''}` : fmtFull(i.due)],
     i.location && ['Where', i.location],
     i.start && ['Opens', fmtFull(i.start)],
@@ -475,7 +476,7 @@ function openItem(i) {
     studyButton(i),
     ...hooks.itemDetails.flatMap(f => f(i, lastModel) || []),
     h('p', { class: 'links' }, ...brightspaceLinks(i),
-      announced(i) ? h('a', { href: announcementUrl(brightspaceOrigin(data.items), i.courseId, i.sourceAnnouncement), target: '_blank', rel: 'noopener noreferrer' }, 'Open the announcement in Brightspace ↗') : null, ' ',
+      announced(i) && i.sourceAnnouncement ? h('a', { href: announcementUrl(brightspaceOrigin(data.items), i.courseId, i.sourceAnnouncement), target: '_blank', rel: 'noopener noreferrer' }, 'Open the announcement in Brightspace ↗') : null, ' ',
       h('label', { style: { display: 'inline-flex', gap: '6px', 'align-items': 'center' } },
         h('input', { type: 'checkbox', checked: i.done, onchange: e => toggleDone(i, e.target.checked) }), 'Done'))));
   $('#dlgItem').showModal();
