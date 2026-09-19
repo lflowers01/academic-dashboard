@@ -351,6 +351,7 @@ dialog.chooser { width: min(420px, calc(100vw - 32px)); }
 .grade-card { text-align: left; border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: var(--panel); display: grid; gap: 6px; }
 .grade-card:hover { border-color: #6b6b6b; background: var(--panel); }
 .grade-big { font-size: 28px; font-weight: 800; display: flex; align-items: baseline; gap: 8px; }
+.grade-unset { font-size: 18px; font-weight: 700; color: var(--muted); }
 .grade-letter { font-size: 15px; font-weight: 800; border: 1.5px solid currentColor; border-radius: 6px; padding: 0 6px; }
 .grade-basis { font-size: 12px; }
 .grade-share { height: 5px; background: var(--panel-2); border-radius: 3px; overflow: hidden; }

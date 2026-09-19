@@ -35,11 +35,14 @@ function classesShown() {
   return D.data.grades.filter(c => visible.has(c.id));
 }
 const gradeOf = c => gradeFor(c.rows, cfgOf(c.id), whatIf[c.id] || {});
+// Not set up: the number is a plain average of Brightspace's rows (its category totals included), so it isn't a grade.
+const bigGrade = g => (g.basis === 'simple' ? [h('span', { class: 'grade-unset' }, 'Not set up yet')] : [pct(g.pct), g.letter ? h('span', { class: 'grade-letter' }, g.letter) : null]);
 const basisText = (c, g) => {
   const s = cfgOf(c.id).scheme;
   if (g.basis === 'weighted') return `Weighted by ${s?.from === 'syllabus' ? 'your syllabus' : 'your setup'}`;
   if (g.basis === 'points') return `Total points (${s?.from === 'syllabus' ? 'from your syllabus' : 'your setup'})`;
-  return c.suggestion ? 'Your syllabus has a grading scheme: open to use it' : 'Rough: set up how this class is graded';
+  const rough = `Brightspace’s rows average ${pct(g.pct)}, but that counts its category totals too`;
+  return c.suggestion ? `Your syllabus has a grading scheme: open to use it. ${rough}.` : `Open to set up how it’s graded. ${rough}.`;
 };
 
 function renderPanel() {
@@ -50,7 +53,7 @@ function renderPanel() {
       const g = gradeOf(c);
       return h('button', { type: 'button', class: 'grade-card', onclick: () => openDialog(c.id) },
         h('div', { class: 'grade-head' }, h('span', { class: 'tag', style: { '--c': D.data.colors?.[c.id] || '#cbd5e1' } }, c.short)),
-        h('div', { class: 'grade-big' }, pct(g.pct), g.letter ? h('span', { class: 'grade-letter' }, g.letter) : null),
+        h('div', { class: 'grade-big' }, g.pct == null ? '—' : bigGrade(g)),
         h('div', { class: 'muted grade-basis' }, g.pct == null ? 'No grades yet' : basisText(c, g)),
         g.share != null ? h('div', { class: 'grade-share', title: `${Math.round(g.share * 100)}% of the course grade is in` },
           h('div', { class: 'grade-share-bar', style: { width: `${Math.round(g.share * 100)}%` } })) : null,
@@ -73,7 +76,7 @@ function fillDialog(id) {
   target ||= ([...scale].reverse().find(s => s.min > (g.pct ?? 0)) || scale[0]).letter; // the next grade up
   const nodes = [
     h('div', { class: 'grade-dlg-head' },
-      h('h2', {}, h('span', { class: 'tag', style: { '--c': D.data.colors?.[id] || '#cbd5e1' } }, c.short), ' ', pct(g.pct), g.letter ? h('span', { class: 'grade-letter' }, g.letter) : null),
+      h('h2', {}, h('span', { class: 'tag', style: { '--c': D.data.colors?.[id] || '#cbd5e1' } }, c.short), ' ', g.pct == null ? '—' : bigGrade(g)),
       h('p', { class: 'muted' }, g.pct == null ? 'No grades yet.' : basisText(c, g), g.share != null ? ` · ${Math.round(g.share * 100)}% of the grade is in` : '')),
     schemeSection(c, cfg),
     needSection(g, scale),

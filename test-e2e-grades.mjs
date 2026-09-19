@@ -50,8 +50,10 @@ async function run(browserName) {
       await toggle(/^Grades/);
       await page.click('#tabGrades');
       await page.waitForSelector('#panelGrades:not([hidden]) .grade-card');
-      assert.match(await card('MA 161').innerText(), /75\.8%/);
-      assert.match(await card('MA 161').innerText(), /Rough: set up how this class is graded/);
+      // not set up yet: no grade or letter is shown, only the rough average, labelled as such
+      assert.match(await card('MA 161').innerText(), /Not set up yet/);
+      assert.equal(await card('MA 161').locator('.grade-letter').count(), 0);
+      assert.match(await card('MA 161').innerText(), /rows average 75\.8%, but that counts its category totals too/);
       assert.equal(await page.isVisible('#panelCal'), false);
     });
 
