@@ -33,6 +33,7 @@ hooks.todoTop.push(m => {
         h('span', { class: 'tag', style: { '--c': D.data.colors?.[f.courseId] || '#cbd5e1' } }, courseShort(f.courseId) || 'Other'), ' ',
         h('strong', {}, f.title),
         h('div', { class: 'muted smart-meta' }, `${KIND[f.kind] || 'Event'} · ${when(f)}${f.location ? ' · ' + f.location : ''}`),
+        f.maybe ? h('div', { class: 'smart-meta smart-maybe' }, `Might be the same as “${f.maybe}”`) : null,
         h('div', { class: 'muted smart-meta' }, 'From ', h('a', { href: annLink(f), target: '_blank', rel: 'noopener noreferrer' }, `“${annTitle(f)}” ↗`))),
       h('div', { class: 'smart-actions' },
         f.missing.length ? null : h('button', { type: 'button', class: 'primary', onclick: e => { e.currentTarget.disabled = true; decide(f.id, 'accept'); } }, 'Accept'),

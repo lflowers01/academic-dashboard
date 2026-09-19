@@ -570,6 +570,19 @@ export function sameEvent(a, b, lenient = false) {
   return shared / Math.max(1, x.size, y.size) >= 0.75;
 }
 
+// Where a checked event goes. Only sure events from this term's classes are added without asking. A deadline is also
+// held for review when the same course already has a found deadline that day: two announcements often word one
+// deadline differently ("Unit 1 coursework deadline" / "Complete remaining Unit 1 work"), and title words can't tell
+// that apart from two real deadlines on one night, so the student decides (nothing is dropped).
+export function smartStatus(f, found, isClass) {
+  if (!f.sure || !isClass) return { status: 'review' };
+  if (f.kind === 'deadline') {
+    const other = found.find(x => x.status !== 'declined' && x.kind === 'deadline' && x.courseId === f.courseId && x.date === f.date);
+    if (other) return { status: 'review', maybe: other.title };
+  }
+  return { status: 'added' };
+}
+
 // Added / accepted found events → dashboard items (kind 'event').
 export function smartItems(found) {
   return found.filter(f => f.status === 'added').map(f => {

@@ -8,7 +8,7 @@ import { spawn, execFile } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { featureOn, annText, verifyFound, sameEvent, smartItems, SMART_DAYS, addDays, dayKey, courseTerm, currentTerm } from './logic.mjs';
+import { featureOn, annText, verifyFound, sameEvent, smartItems, smartStatus, SMART_DAYS, addDays, dayKey, courseTerm, currentTerm } from './logic.mjs';
 
 const MODEL = 'claude-haiku-4-5-20251001';
 const TIMEOUT = Number(process.env.DASH_SMART_TIMEOUT) || 120_000;
@@ -97,6 +97,16 @@ async function extract(list) {
 
 export function createSmart({ state, readJson, writeJson, log, announcements, courses, itemsOf, visibleCourses }) {
   const store = { scanned: {}, found: [], lastRun: null, lastError: null, lastCostUsd: null, ...readJson('smart-ann.json', {}) };
+  // Once, for data from v1.4.0: a second auto-added deadline on the same course and day (a reworded repeat) goes back
+  // to review, as smartStatus now decides. Events the student accepted are never touched.
+  if (!store.heldRepeats) {
+    store.found.forEach((f, n) => {
+      if (f.status !== 'added' || f.accepted || f.kind !== 'deadline') return;
+      const other = store.found.slice(0, n).find(x => x.status === 'added' && x.kind === 'deadline' && x.courseId === f.courseId && x.date === f.date);
+      if (other) Object.assign(f, { status: 'review', maybe: other.title });
+    });
+    store.heldRepeats = true;
+  }
   let running = false, lastAttempt = 0;
   const on = () => featureOn(state, 'smartAnnouncements');
   const save = () => writeJson('smart-ann.json', store);
@@ -134,10 +144,9 @@ export function createSmart({ state, readJson, writeJson, log, announcements, co
           if (existing.some(x => sameEvent(x, f, true)) || store.found.some(x => sameEvent(x, f))) continue;
           const i = store.found.filter(x => x.annId === f.annId).length;
           const { sure, ...keep } = f;
-          // only this term's classes get events added without asking; clubs, programs, newsletters go to review
-          const add = sure && isClass(f.courseId);
-          store.found.push({ ...keep, id: `sa:${f.annId}:${i}`, status: add ? 'added' : 'review' });
-          add ? added++ : review++;
+          const st = smartStatus({ ...f, sure }, store.found, isClass(f.courseId));
+          store.found.push({ ...keep, id: `sa:${f.annId}:${i}`, ...st });
+          st.status === 'added' ? added++ : review++;
         }
         for (const a of chunk) store.scanned[a.id] = now.toISOString();
         save();
@@ -190,7 +199,7 @@ export function createSmart({ state, readJson, writeJson, log, announcements, co
         const f = store.found.find(x => x.id === b.id);
         if (!f) { send(res, 404, { error: 'That event is gone.' }); return true; }
         if (b.action === 'decline' || b.action === 'remove') f.status = 'declined';
-        else if (b.action === 'accept') Object.assign(f, b.fields ? clean(b.fields, f) : {}, { status: 'added' });
+        else if (b.action === 'accept') Object.assign(f, b.fields ? clean(b.fields, f) : {}, { status: 'added', accepted: true, maybe: undefined });
         else { send(res, 400, { error: 'Unknown action.' }); return true; }
         save(); send(res, 200, { ok: true }); return true;
       }

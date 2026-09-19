@@ -312,6 +312,7 @@ dialog.chooser { width: min(420px, calc(100vw - 32px)); }
 
 /* Smart Announcements */
 .found-mark { color: #cfb991; }
+.smart-maybe { color: var(--amber); }
 .smart-card { border-color: #cfb991; }
 .smart-list { display: grid; }
 .smart-row { display: flex; gap: 8px; justify-content: space-between; align-items: flex-start; padding: 8px 10px; }

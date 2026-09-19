@@ -174,3 +174,29 @@ test('announcements from courses unticked in Settings → Courses are ignored un
     assert.ok(d.smart.review.some(f => f.kind === 'optional' && f.courseId === 104), 'ticking it again reads its announcements');
   } finally { await s.stop(); }
 });
+
+test('a second sure deadline on the same course and day waits for review, naming the first (reworded repeats)', async () => {
+  const { smartStatus } = await import('./logic.mjs');
+  const first = { kind: 'deadline', courseId: 5, date: '2026-09-20', title: 'Unit 1 coursework deadline', status: 'added' };
+  const next = { kind: 'deadline', courseId: 5, date: '2026-09-20', title: 'Complete remaining Unit 1 work', sure: true };
+  assert.deepEqual(smartStatus(next, [first], true), { status: 'review', maybe: 'Unit 1 coursework deadline' });
+  assert.deepEqual(smartStatus(next, [{ ...first, status: 'declined' }], true), { status: 'added' }, 'a declined one does not count');
+  assert.deepEqual(smartStatus(next, [{ ...first, date: '2026-09-21' }], true), { status: 'added' });
+  assert.deepEqual(smartStatus({ ...next, kind: 'review' }, [first], true), { status: 'added' }, 'only deadlines pile up like this');
+  assert.deepEqual(smartStatus(next, [], false), { status: 'review' }, 'non-class site');
+  assert.deepEqual(smartStatus({ ...next, sure: false }, [], true), { status: 'review' });
+
+  // data saved by v1.4.0 with both auto-added is fixed once on start-up; accepted events are left alone
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dash-smart-'));
+  const f = (id, title, extra = {}) => ({ id, annId: 1, courseId: 102, kind: 'deadline', title, date: '2030-09-20', start: null, end: null, allDay: true, location: '', quote: 'q', missing: [], status: 'added', ...extra });
+  fs.writeFileSync(path.join(dir, 'smart-ann.json'), JSON.stringify({ scanned: {}, found: [f('sa:1:0', 'Unit 1 coursework deadline'), f('sa:1:1', 'Complete remaining Unit 1 work'), f('sa:1:2', 'Lab report', { accepted: true })] }));
+  fs.writeFileSync(path.join(dir, 'state.json'), JSON.stringify({ features: { smartAnnouncements: true } }));
+  const port = await freePort();
+  const child = spawn(process.execPath, [path.join(ROOT, 'server.mjs'), '--fixture'], { windowsHide: true, stdio: 'ignore', env: { ...process.env, DASH_PORT: String(port), DASH_DATA: dir } });
+  try {
+    let d; for (let i = 0; i < 60; i++) { try { d = await (await fetch(`http://localhost:${port}/api/data`)).json(); break; } catch { await new Promise(r => setTimeout(r, 100)); } }
+    assert.deepEqual(d.smart.review.map(x => [x.title, x.maybe]), [['Complete remaining Unit 1 work', 'Unit 1 coursework deadline']]);
+    assert.ok(d.items.some(i => i.title === 'Lab report'), 'accepted events stay');
+    assert.ok(d.items.some(i => i.title === 'Unit 1 coursework deadline'));
+  } finally { await new Promise(r => { child.once('exit', r); child.kill(); }); }
+});

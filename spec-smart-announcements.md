@@ -32,6 +32,11 @@ review card at the top of the To-do column; on enable, scan the last 14 days onc
 | kind `optional` (career, workshops, clubs, research…), confidence **low** (missing time/place/date detail), or from a non-class site (honors program, clubs, newsletters) | **Review** card |
 | an exam on the same course + day as one already known; the same thing as an existing Brightspace item (same course, day, time, title paraphrased); or a repeat of an event already found | skipped |
 
+**Reworded repeats of a deadline** ("Unit 1 coursework deadline" / "Complete remaining Unit 1 work") can't be told apart from two
+real deadlines by title words, so a second sure deadline on a course and day that already has one goes to review with
+"Might be the same as “…”" instead of being added (`smartStatus`); the student decides and nothing is dropped. Data
+saved by v1.4.0 is fixed the same way once on start-up (events the student accepted are never moved).
+
 Repeats: timed events at the same course/day/minute need half their title words in common; deadlines (no time or
 11:59 PM) must nearly match, because several things are often due the same night (a real pattern: "PreLab Quiz – How Fast
 Does It React" and "Procedure – How Fast Does It React", from a lab whose work isn't in Brightspace; both kept).
