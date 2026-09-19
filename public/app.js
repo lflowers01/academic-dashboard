@@ -170,8 +170,7 @@ function itemRow(i, { showDay = false } = {}) {
   if (i.rangeStart && !i.done && i.st !== 'overdue') { if (i.st !== 'today') badges.push(h('span', { class: 'badge b-info' }, rangeLabel(i))); } // under Today, a running range needs no badge
   else if (i.st === 'overdue') badges.push(h('span', { class: 'badge b-overdue' }, `⚠ OVERDUE · ${fmtDay(i.due)}`));
   else if (i.st === 'today') badges.push(h('span', { class: 'badge b-today' }, `TODAY ${dueLabel(i)}`));
-  else if (i.st === 'tomorrow') badges.push(h('span', { class: 'badge b-tomorrow' }, `TOMORROW ${dueLabel(i)}`));
-  else if (i.due && (showDay || i.st === 'week' || i.st === 'later' || i.st === 'done')) badges.push(h('span', {}, `${fmtDay(i.due)} · ${dueLabel(i)}`));
+  else if (i.due && (showDay || i.st === 'tomorrow' || i.st === 'week' || i.st === 'later' || i.st === 'done')) badges.push(h('span', {}, `${fmtDay(i.due)} · ${dueLabel(i)}`));
   if (i.opens) badges.push(h('span', { class: 'badge b-opens' }, `OPENS ${fmtDay(i.start)} ${fmtTime(i.start)}`));
   if (i.timeLimit) badges.push(h('span', { class: 'badge b-info' }, `${i.timeLimit} min timed`));
   if (i.points) badges.push(h('span', {}, `${i.points} pts`));

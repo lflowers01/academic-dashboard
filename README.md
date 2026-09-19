@@ -78,7 +78,7 @@ When it's done, bookmark **http://localhost:4321**.
 | Put events from announcements on the calendar (optional) | **⚙ Settings → Features → Smart Announcements**, see below |
 | Update right now | **↻ Refresh** (about 2 minutes) |
 
-**Colors:** each course has its own color. Urgency always appears as a labeled badge: red **OVERDUE**, orange **TODAY**, yellow **TOMORROW**. **Gold = exam.** A dashed outline on the calendar means "**opens** at this time".
+**Colors:** each course has its own color. Urgency always appears as a labeled badge: red **OVERDUE** and orange **TODAY** (anything later just shows its date and time). **Gold = exam.** A dashed outline on the calendar means "**opens** at this time".
 
 **Google Calendar (optional, off by default):** shows events from the Google calendars you pick next to your Brightspace work, outlined (◷) so they never look like assignments. **All · Brightspace · Google** above the calendar switches between them. You can create, edit and delete events on calendars where you turn on **Allow edits**, and send an assignment or exam to Google from its details. It needs [Claude Code](https://claude.com/claude-code) signed in to a Claude account with the **Google Calendar connector** connected (claude.ai → Settings → Connectors). It syncs every 6 hours and on **Sync now**, using a small amount of your Claude usage (about $0.02–0.10 per sync on the cheapest model). Your events pass through Claude; nothing else leaves your PC.
 
