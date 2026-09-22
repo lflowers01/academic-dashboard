@@ -135,6 +135,9 @@ test('API guards and validation', async () => {
     assert.equal((await s.post('/api/tasks', { title: 'x', date: '2026-09-30', endDate: '2026-09-29' })).status, 400); // end before start
     assert.equal((await s.post('/api/tasks', { title: 'x', date: '2026-09-30', endDate: '2026-10-02' })).body.endDate, '2026-10-02');
     assert.equal((await s.post('/api/tasks', { title: 'x', date: '2026-09-30', endDate: '2026-09-30' })).body.endDate, ''); // same day = no range
+    const setupCourses = (await s.api('/api/external/courses')).body.courses;
+    assert.ok(setupCourses.length > 0);
+    assert.deepEqual(Object.keys(setupCourses[0]).sort(), ['code', 'id', 'name', 'short']);
     assert.equal((await s.api('/..%2f..%2fserver.mjs')).status, 404);
     assert.equal((await s.api('/%2e%2e/server.mjs')).status, 404);
     const r = await fetch(`${s.base}/icon.png`);

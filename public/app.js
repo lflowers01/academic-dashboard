@@ -178,6 +178,7 @@ function itemRow(i, { showDay = false } = {}) {
   if (i.opens) badges.push(h('span', { class: 'badge b-opens' }, `OPENS ${fmtDay(i.start)} ${fmtTime(i.start)}`));
   if (i.timeLimit) badges.push(h('span', { class: 'badge b-info' }, `${i.timeLimit} min timed`));
   if (i.points) badges.push(h('span', {}, `${i.points} pts`));
+  if (['labflow', 'macmillan', 'pearson'].includes(i.source)) badges.push(h('span', { class: 'badge b-info' }, `↻ ${i.sourceName}`));
   if (i.isNew && !i.done) badges.push(h('span', { class: 'badge b-new' }, 'NEW'));
   if (i.done && (i.submitted || i.graded) && typeof data.state.done[i.id] !== 'boolean') badges.push(h('span', {}, i.submitted ? '✓ submitted' : '✓ graded'));
   if (noteOf(i)) badges.push(h('span', { class: 'note-mark', title: noteOf(i) }, 'note'));
@@ -487,6 +488,7 @@ function openItem(i) {
 function brightspaceLinks(i) {
   if (!i.url) return [];
   const ext = (href, text, cls) => h('a', { href, target: '_blank', rel: 'noopener noreferrer', class: cls }, text);
+  if (['labflow', 'macmillan', 'pearson'].includes(i.source)) return [ext(i.url, `Open in ${i.sourceName} ↗`)];
   if (i.kind === 'assignment' && i.due && new Date(i.due) < new Date())
     return [ext(assignmentListUrl(brightspaceOrigin(data.items), i.courseId), 'Open course assignments in Brightspace ↗'), ' ', ext(i.url, 'Submission page ↗ (may be closed)', 'minor')];
   return [ext(i.url, 'Open in Brightspace ↗')];
@@ -640,10 +642,17 @@ function openSettings(sec = settingsSection) {
   if (!$('#dlgSettings').open) $('#dlgSettings').showModal();
 }
 function renderFeatures() {
-  $('#featureList').replaceChildren(...(FEATURES.length ? FEATURES.map(f => h('div', { class: 'feature-row' },
+  const rows = FEATURES.length ? FEATURES.map(f => h('div', { class: 'feature-row' },
     h('label', { class: 'switch-row' },
       h('input', { type: 'checkbox', role: 'switch', checked: featureOn(data.state, f.id), onchange: e => patchState({ features: { [f.id]: e.target.checked } }).then(load).then(renderFeatures).catch(() => {}) }), // load: the feature's own data (e.g. data.smart) only comes with a fresh fetch
-      h('span', {}, h('strong', {}, f.name), f.beta ? h('span', { class: 'beta' }, 'Beta') : null, h('br'), h('small', { class: 'muted' }, f.description))))) : [h('p', { class: 'muted' }, 'No optional features yet.')]));
+      h('span', {}, h('strong', {}, f.name), f.beta ? h('span', { class: 'beta' }, 'Beta') : null, h('br'), h('small', { class: 'muted' }, f.description))))) : [h('p', { class: 'muted' }, 'No optional features yet.')];
+  if (data.external) {
+    rows.push(h('div', { class: 'external-status' }, h('strong', {}, 'Chrome sync status'),
+      ...Object.values(data.external.providers || {}).map(p => h('p', {}, `${p.name}: `,
+        p.error ? h('span', { class: 'error' }, p.error) : p.scannedAt ? `${p.count} assignments · ${fmtAgo(p.scannedAt)}` : 'waiting for first scan')),
+      h('small', { class: 'muted' }, 'Automatic sync runs every 3 hours while Chrome is open. Click the extension icon to sync now. No Claude installation is needed.')));
+  }
+  $('#featureList').replaceChildren(...rows);
 }
 
 function openCourses() {

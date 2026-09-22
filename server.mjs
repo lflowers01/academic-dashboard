@@ -8,6 +8,7 @@ import { createGcal } from './gcal-routes.mjs';
 import { createSmart } from './smart-ann.mjs';
 import { createSyllabus } from './syllabus.mjs';
 import { createUpdater, restartServer } from './update.mjs';
+import { createExternalSync } from './external-sync.mjs';
 
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const FIXTURE = process.argv.includes('--fixture');
@@ -129,6 +130,7 @@ const examIds = () => new Set(itemsOf().filter(i => i.exam).map(i => i.id));
 
 // ---------- Google Calendar (optional feature, gcal-routes.mjs) ----------
 const gcal = createGcal({ state, readJson, writeJson, log, itemsOf: () => itemsOf(), courses: () => coursesOf(cache?.raw) });
+const external = createExternalSync({ readJson, writeJson, log });
 
 // ---------- updates (always on, update.mjs) ----------
 const updater = createUpdater({ root: ROOT, dataDir: DATA, readJson, writeJson, log, onRestart: () => restartServer(ROOT, cb => server.close(cb)) });
@@ -165,7 +167,8 @@ const shortById = () => Object.fromEntries(coursesOf(cache?.raw).map(c => [c.id,
 const calendarWith = found => onCalendar({ items: [...brightspaceItems(), ...found], tasks, google: gcal.payload()?.events || [], shortById: shortById() });
 const myTasks = () => onCalendar({ tasks, shortById: shortById() });
 function itemsOf() {
-  return [...brightspaceItems(), ...smart.items(), ...syllabus.items()].map(i => ({ ...i, firstSeen: cache?.firstSeen?.[i.id] }));
+  const imported = featureOn(state, 'externalAssignments') ? external.items() : [];
+  return [...brightspaceItems(), ...smart.items(), ...syllabus.items(), ...imported].map(i => ({ ...i, firstSeen: cache?.firstSeen?.[i.id] }));
 }
 
 // ---------- notifications ----------
@@ -300,6 +303,7 @@ function payload() {
     gcal: gcal.payload(), // null unless the Google Calendar feature is on
     smart: smart.payload(), // null unless Smart Announcements is on
     syllabus: syllabus.payload(), // null unless Syllabus scan is on
+    external: featureOn(state, 'externalAssignments') ? external.payload() : null,
     update: updater.payload(),
     // Grades (optional feature): each class's gradebook rows, plus the scheme its syllabus gives (if Syllabus scan read one)
     grades: featureOn(state, 'grades') ? coursesOf(raw).filter(c => { const t = currentTerm(courses); return t && courseTerm(c) === t; })
@@ -351,6 +355,9 @@ const server = http.createServer(async (req, res) => {
       return send(res, 415, { error: 'json only' });
 
     if (p === '/api/data' && req.method === 'GET') return send(res, 200, payload());
+    if (p === '/api/external/courses' && req.method === 'GET') return send(res, 200, {
+      courses: coursesOf(cache?.raw || { courses: [] }).map(({ id, short, name, code }) => ({ id, short, name, code })),
+    });
 
     if (p === '/api/refresh' && req.method === 'POST') {
       meta.paused = false; // a manual refresh is allowed to try sign-in again
@@ -419,6 +426,7 @@ const server = http.createServer(async (req, res) => {
     if (await gcal.handle(req, res, p, { readBody, send })) return;
     if (await smart.handle(req, res, p, { readBody, send })) return;
     if (await syllabus.handle(req, res, p, { readBody, send })) return;
+    if (await external.handle(req, res, p, { readBody, send })) return;
     if (await updater.handle(req, res, p, { readBody, send })) return;
 
     if (p === '/api/signin' && req.method === 'POST') {

@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8"><title>Assignment Sync</title>
+<style>
+body{font:14px system-ui;width:380px;margin:0;padding:16px;background:#111;color:#eee}h2{margin:0 0 6px}p{color:#bbb}.provider{border-top:1px solid #333;padding:12px 0}.provider strong{display:block;margin-bottom:5px}.row{display:flex;gap:7px;align-items:center}.url{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#aaa;margin:5px 0}.course{flex:1;min-width:0;padding:7px;background:#222;color:#eee;border:1px solid #555;border-radius:4px}button{padding:8px;background:#cfb991;border:0;border-radius:5px;font-weight:700;cursor:pointer}button.secondary{background:#333;color:#eee}.actions button{flex:1}.actions{display:flex;gap:8px;margin-top:12px}#status{white-space:pre-wrap;color:#bbb;margin:10px 0 0}#status.ok{color:#9ee6a1}#status.bad{color:#ff9b9b}label.auto{display:flex;gap:8px;align-items:center;margin-top:8px}
+</style>
+<h2>Assignment sync</h2>
+<p>Open a provider course page, click this extension, then choose the matching dashboard course.</p>
+<div id="providers"></div>
+<label class="auto"><input id="automatic" type="checkbox"> Sync automatically every 3 hours</label>
+<div class="actions"><button id="save" class="secondary">Save setup</button><button id="sync">Sync now</button></div>
+<div id="status">Loading dashboard courses…</div>
+<script type="module" src="popup.js"></script>
+</html>

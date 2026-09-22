@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "Academic Dashboard Assignment Sync",
+  "version": "1.2.0",
+  "description": "Syncs Labflow, Macmillan Achieve, and Pearson MyLab deadlines to the local Academic Dashboard.",
+  "permissions": ["alarms", "storage", "tabs"],
+  "host_permissions": [
+    "http://localhost:4321/*",
+    "http://127.0.0.1:4321/*",
+    "https://courses.catalystedu.com/*",
+    "https://achieve.macmillanlearning.com/*",
+    "https://mylab.pearson.com/*"
+  ],
+  "background": { "service_worker": "worker.js", "type": "module" },
+  "action": { "default_popup": "popup.html", "default_title": "Sync external assignments" },
+  "content_scripts": [
+    { "matches": ["https://courses.catalystedu.com/app/course/*"], "js": ["scan-labflow.js"], "run_at": "document_idle" },
+    { "matches": ["https://achieve.macmillanlearning.com/courses/*/mycourse*"], "js": ["scan-macmillan.js"], "run_at": "document_idle" },
+    { "matches": ["https://mylab.pearson.com/Student/DoAssignments.aspx*"], "js": ["scan-pearson.js"], "run_at": "document_idle" }
+  ]
+}
