@@ -368,7 +368,8 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/slack/connect' && req.method === 'POST') {
       if (!featureOn(state, 'slack')) return send(res, 409, { error: 'Turn on Slack in Settings → Features first.' });
       const b = await readBody(req);
-      return send(res, 200, await slack.connect(String(b.token || '')));
+      try { return send(res, 200, await slack.connect(String(b.token || ''))); }
+      catch (e) { return send(res, 400, { error: e.message }); }
     }
     if (p === '/api/slack/disconnect' && req.method === 'POST') {
       const b = await readBody(req);
