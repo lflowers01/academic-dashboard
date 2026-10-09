@@ -127,7 +127,7 @@ All off by default. Turn them on in **⚙ Settings → Features**; turning one o
 
 ### Slack clubs
 
-Turn on **Slack clubs** in ⚙ Settings → Features, then open the Slack settings tab. Connect each Slack account once; you do not add individual clubs or channels. Messages that mention you and contain an upcoming event are checked every five minutes. The workspace or channel name labels the event (for example, **PER** or **Orbital**), and its details link back to the Slack message. Claude helps with relative or complex dates when it is available; explicit dated events still work if Claude is unavailable or at its limit.
+Turn on **Slack clubs** in ⚙ Settings → Features, then open the Slack settings tab. Connect each Slack account once; you do not add individual clubs or channels. Messages that mention you or ping a whole channel and contain an upcoming event are checked every five minutes. The workspace or channel name labels the event (for example, **PER** or **Orbital**), and its details link back to the Slack message. Claude helps with complex dates when it is available; explicit dates, today, tomorrow, and weekdays work if Claude is unavailable or at its limit.
 
 To connect an account, create a [Slack app](https://api.slack.com/apps), add the **search:read User Token Scope** under OAuth & Permissions, install the app to that workspace, and paste its **User OAuth Token** into the dashboard's Slack settings. Repeat once for each separate Slack login. A workspace may require an admin to approve the app. Tokens are encrypted for the current Windows user in `data/slack.json`; never share the `data` folder. This direct Slack connection is separate from any AI assistant's Slack connector.
 
