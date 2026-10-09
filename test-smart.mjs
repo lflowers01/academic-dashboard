@@ -82,6 +82,8 @@ test('duplicates: tasks and Google events count as already on the calendar; your
   assert.ok(alreadyThere(f(102, 'Exam 1 review session', '2030-01-09', '18:00', 'review'), cal), 'a Google event naming the class');
   assert.ok(alreadyThere(f(102, 'Lab practical', '2030-01-12', null), cal), 'a task whose title names the class');
   assert.ok(!alreadyThere(f(101, 'Quiz 3', '2030-01-10', '20:00'), cal.filter(x => !x.exam)), 'different things stay');
+  const moved = { courseId: 101, kind: 'deadline', annId: 7, quote: 'Essay due Oct 10', originalDate: '2030-01-10', date: '2030-01-12', title: 'Essay (edited)' };
+  assert.ok(alreadyThere({ ...moved, date: '2030-01-10', title: 'Essay' }, [], [moved]), 'a rescan cannot restore an edited date');
   const found = [{ id: 'sy:101:0', courseId: 101, kind: 'exam', title: 'Exam 2', date: '2030-01-10', start: '20:00', status: 'added', quote: 'x' }];
   assert.equal(smartItems(found).length, 1);
   assert.equal(smartItems(found, onCalendar({ tasks: [{ title: 'Exam 2', date: '2030-01-10', courseId: 101, exam: true }] })).length, 0, 'shown once, as your task');
@@ -143,6 +145,12 @@ test('decide: accept (with filled-in fields), decline, remove; bad fields are re
     assert.equal(made.title, 'Makeup lab');
     assert.equal(made.location, 'EE 063');
     assert.equal(new Date(made.due).getHours(), 15);
+    assert.equal(made.found.date, lab.date);
+    const movedDate = new Date(`${lab.date}T12:00`); movedDate.setDate(movedDate.getDate() + 1);
+    const date = [movedDate.getFullYear(), String(movedDate.getMonth() + 1).padStart(2, '0'), String(movedDate.getDate()).padStart(2, '0')].join('-');
+    assert.equal((await s.post('/api/smart/decide', { id: lab.id, action: 'accept', fields: { date } })).status, 200);
+    assert.equal((await s.data()).items.find(i => i.id === lab.id).found.date, date);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(s.dir, 'smart-ann.json'))).found.find(f => f.id === lab.id).originalDate, lab.date);
     assert.equal(d.items.some(i => i.id === fair.id), false);
     await s.post('/api/smart/decide', { id: lab.id, action: 'remove' });
     d = await s.data();

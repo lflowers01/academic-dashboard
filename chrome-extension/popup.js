@@ -1,6 +1,7 @@
-import { PROVIDERS, PROVIDER_IDS, providerUrl, validProviderSettings } from './config.js';
+import { PROVIDERS, PROVIDER_IDS, providerUrl, validProviderSettings, validDashboardUrl } from './config.js';
 
-const dashboard = 'http://localhost:4321';
+const dashboardInput = document.querySelector('#dashboard');
+const dashboard = () => validDashboardUrl(dashboardInput.value);
 const status = document.querySelector('#status');
 const providerRoot = document.querySelector('#providers');
 const automatic = document.querySelector('#automatic');
@@ -63,12 +64,13 @@ function drawProvider(id, saved) {
 }
 
 async function load() {
-  const saved = await chrome.storage.local.get(['automatic', ...PROVIDER_IDS]);
+  const saved = await chrome.storage.local.get(['automatic', 'dashboard', ...PROVIDER_IDS]);
+  dashboardInput.value = validDashboardUrl(saved.dashboard) || 'http://localhost:4321';
   automatic.checked = saved.automatic !== false;
   try {
     const [dataResponse, externalResponse] = await Promise.all([
-      fetch(`${dashboard}/api/external/courses`),
-      fetch(`${dashboard}/api/external`),
+      fetch(`${dashboard()}/api/external/courses`),
+      fetch(`${dashboard()}/api/external`),
     ]);
     if (!dataResponse.ok || !externalResponse.ok) throw Error();
     const data = await dataResponse.json();
@@ -90,7 +92,8 @@ async function load() {
 }
 
 async function save() {
-  const update = { automatic: automatic.checked };
+  if (!dashboard()) throw Error('Enter your local dashboard address, such as http://localhost:4321');
+  const update = { automatic: automatic.checked, dashboard: dashboard() };
   let configured = 0;
   for (const id of PROVIDER_IDS) {
     const raw = { url: controls[id].url, courseId: Number(controls[id].select.value) };
@@ -101,7 +104,7 @@ async function save() {
   }
   if (!configured) throw Error('Configure at least one provider first');
   await chrome.storage.local.set(update);
-  const enabled = await fetch(`${dashboard}/api/state`, {
+  const enabled = await fetch(`${dashboard()}/api/state`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ features: { externalAssignments: true } }),
   });

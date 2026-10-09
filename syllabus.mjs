@@ -130,7 +130,11 @@ export function createSyllabus({ state, readJson, writeJson, log, dataDir, cours
         const f = store.found.find(x => x.id === b.id);
         if (!f) { send(res, 404, { error: 'That event is gone.' }); return true; }
         if (b.action === 'decline' || b.action === 'remove') f.status = 'declined';
-        else if (b.action === 'accept') Object.assign(f, b.fields ? eventFields(b.fields, f) : {}, { status: 'added', accepted: true, maybe: undefined });
+        else if (b.action === 'accept') {
+          const fields = b.fields ? eventFields(b.fields, f) : {};
+          if (b.fields && !f.originalDate) f.originalDate = f.date;
+          Object.assign(f, fields, { status: 'added', accepted: true, maybe: undefined });
+        }
         else { send(res, 400, { error: 'Unknown action.' }); return true; }
         save(); send(res, 200, { ok: true }); return true;
       }

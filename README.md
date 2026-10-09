@@ -123,6 +123,14 @@ When it's done, bookmark **http://localhost:4321**.
 
 All off by default. Turn them on in **⚙ Settings → Features**; turning one off hides it again.
 
+**Dated Brightspace Course Content is automatic.** Links and topics with a due date, including external textbook quizzes such as COM 114 Chapter 7 and Chapter 12, join the calendar and to-do list on every Brightspace refresh. This works without Claude. Opening a topic does not mark its external quiz submitted; use the dashboard checkbox when it is done.
+
+### Slack clubs
+
+Turn on **Slack clubs** in ⚙ Settings → Features, then open the Slack settings tab. Connect each Slack account once; you do not add individual clubs or channels. Messages that mention you and contain an upcoming event are checked every five minutes. The workspace or channel name labels the event (for example, **PER** or **Orbital**), and its details link back to the Slack message. Claude helps with relative or complex dates when it is available; explicit dated events still work if Claude is unavailable or at its limit.
+
+To connect an account, create a [Slack app](https://api.slack.com/apps), add the **search:read User Token Scope** under OAuth & Permissions, install the app to that workspace, and paste its **User OAuth Token** into the dashboard's Slack settings. Repeat once for each separate Slack login. A workspace may require an admin to approve the app. Tokens are encrypted for the current Windows user in `data/slack.json`; never share the `data` folder. This direct Slack connection is separate from any AI assistant's Slack connector.
+
 <p align="center"><img src="docs/screenshots/features.png" alt="Settings, Features: switches for Google Calendar, Syllabus scan, Smart Announcements, and Grades (Beta)" width="640"></p>
 
 The three that read text with AI (Google Calendar, Smart Announcements, Syllabus scan) need **[Claude Code](https://claude.com/claude-code)** installed and signed in, and use a small amount of your Claude usage. **None of them adds anything twice:** anything already on your calendar is skipped. That covers Brightspace items, announced exams, each other's finds, your own tasks, and Google events whose title names the class. If you add a task for something they found, it shows once, as your task.
@@ -135,6 +143,8 @@ Shows events from the Google calendars you pick next to your Brightspace work, o
 <img src="docs/screenshots/found.png" alt="Found in announcements and Found in syllabi: suggested events with Accept, Edit, Fill in and Decline buttons" width="330" align="right">
 
 **Smart Announcements** reads your announcements from the last 2 weeks, and new ones as they arrive, and finds dated events: review sessions, help rooms, exams, deadlines (including ones not in Brightspace, like a lab's pre-lab), class changes. Events from your classes that it's sure about go straight on the calendar, marked ✦. Optional events (career fairs, workshops, club events) and anything missing a time or place wait in **Found in announcements** above your to-do list. There you can **Accept**, **Edit** or **Decline** them. About $0.03–0.06 for the first 2 weeks, then a cent or two per new announcement.
+
+To correct a date from an announcement or syllabus, open the item on the calendar or to-do list and choose **Edit date & time**. Your correction stays after a refresh or syllabus rescan.
 
 **Syllabus scan** reads each class's syllabus. That's both what Brightspace has (the course overview and any file called "Syllabus" or "Course Schedule") and files you add (drop PDFs, Word files or saved web pages into ⚙ Settings → Syllabus scan; the class is recognized from the file name). Every dated exam, quiz, deadline and no-class day goes on your calendar the same careful way. Anything it isn't sure about waits in **Found in syllabi**, with **Accept all** for long lists like weekly lab deadlines. It also reads each class's grading scheme for Grades. About $0.05–0.25 for a whole term; it only re-reads a class when you add a file or click Rescan. Reading PDFs needs Node.js 22 or newer.
 

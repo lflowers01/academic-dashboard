@@ -5,8 +5,8 @@
   "description": "Syncs Labflow, Macmillan Achieve, and Pearson MyLab deadlines to the local Academic Dashboard.",
   "permissions": ["alarms", "storage", "tabs"],
   "host_permissions": [
-    "http://localhost:4321/*",
-    "http://127.0.0.1:4321/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*",
     "https://courses.catalystedu.com/*",
     "https://achieve.macmillanlearning.com/*",
     "https://mylab.pearson.com/*"

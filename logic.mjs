@@ -156,6 +156,25 @@ export function buildItems(raw) {
       });
     }
   }
+  // Dated external-tool links can live only in Course Content (e.g. a textbook chapter quiz).
+  for (const [courseId, tree] of Object.entries(raw.content || {})) {
+    const visit = node => {
+      if (Array.isArray(node)) return node.forEach(visit);
+      if (!node || typeof node !== 'object') return;
+      if (node.type === 'topic' && node.dueDate && node.title && node.id != null && !Number.isNaN(Date.parse(node.dueDate))) {
+        const duplicate = items.some(i => i.courseId === Number(courseId) && i.due &&
+          normName(i.title) === normName(node.title) && Math.abs(new Date(i.due) - new Date(node.dueDate)) < 60_000);
+        if (!duplicate) items.push({
+          id: `bs:${courseId}:content:${node.id}`, courseId: Number(courseId), kind: 'assignment',
+          exam: isExamName(node.title), title: node.title, due: node.dueDate, start: null, end: null,
+          points: null, timeLimit: null, url: (() => { try { const u = new URL(node.url, brightspaceOrigin(items)); return u.protocol === 'https:' ? u.href : null; } catch { return null; } })(),
+          instructions: '', submitted: false, graded: false, source: 'content',
+        });
+      }
+      for (const child of node.children || node.contentTree || node.modules || []) visit(child);
+    };
+    visit(tree);
+  }
   // Announced exams, unless the course already has an exam item on that day.
   const examDays = new Set(items.filter(i => i.exam && i.due).map(i => `${i.courseId}:${dayKey(i.due)}`));
   for (const e of examsFromAnnouncements(raw.announcements)) {
@@ -222,6 +241,7 @@ export function shortName(c) {
 
 // This term's registrar courses always; everything else only while it has a not-done item due in the next 30 days.
 export function defaultVisible(course, items, doneMap, now, term) {
+  if (String(course.code || '').startsWith('club.')) return true;
   if (term && courseTerm(course) === term) return true;
   const n = new Date(now), horizon = addDays(n, 30);
   return items.some(i => i.courseId === course.id && i.due && !isDone(i, doneMap, n)
@@ -436,6 +456,7 @@ export const sundayOf = d => { d = startOfDay(d); return addDays(d, -d.getDay())
 export const GCAL_WINDOW = { back: 7, ahead: 42 }; // days around today that a sync reads
 export const FEATURES = [
   { id: 'externalAssignments', name: 'Labflow, Macmillan & Pearson assignments', description: 'Imports deadlines from the signed-in course pages in Chrome and refreshes them every 3 hours. Uses the included local Chrome extension; no AI assistant is required.' },
+  { id: 'slack', name: 'Slack clubs', description: 'Finds events in messages that mention you across connected Slack accounts. Club names come from the workspace or channel. Syncs every five minutes and uses Claude for complex dates when available.' },
   { id: 'googleCalendar', name: 'Google Calendar', description: `See and manage events from Google calendars you choose, next to your Brightspace work. Syncs events from ${GCAL_WINDOW.back / 7} week back to ${GCAL_WINDOW.ahead / 7} weeks ahead; other months load when you ask. Uses the Google Calendar connector in Claude (Claude Code required).` },
   { id: 'syllabusScan', name: 'Syllabus scan', description: 'Reads each class\'s syllabus (from Brightspace, or files you add) and puts its exams and deadlines on your calendar, the same careful way Smart Announcements does. It also reads the grading scheme for the Grades tab. Uses Claude (Claude Code required).' },
   { id: 'smartAnnouncements', name: 'Smart Announcements', description: 'Finds dated events in new announcements (review sessions, help rooms, exams, deadlines, class changes). Class events it is sure about are added to your calendar; the rest wait for you to accept, edit or decline. Uses Claude (Claude Code required).' },
@@ -594,7 +615,8 @@ export function onCalendar({ items = [], tasks = [], google = [], shortById = {}
 // that day, or the same event by sameEvent.
 export const alreadyThere = (f, existing, found = []) =>
   (f.kind === 'exam' && existing.some(x => x.exam && x.courseId === f.courseId && x.date === f.date))
-  || existing.some(x => sameEvent(x, f, true)) || found.some(x => sameEvent(x, f));
+  || existing.some(x => sameEvent(x, f, true)) || found.some(x => sameEvent(x, f)
+    || (x.courseId === f.courseId && x.kind === f.kind && x.annId === f.annId && x.quote === f.quote && (x.originalDate || x.date) === f.date));
 
 // Where a checked event goes. Only sure events from this term's classes are added without asking. A deadline is also
 // held for review when the same course already has a found deadline that day: two announcements often word one
@@ -619,6 +641,7 @@ export function smartItems(found, mine = []) {
       due: at(f.start).toISOString(), end: f.end ? at(f.end).toISOString() : null, allDay: !f.start, start: null,
       location: f.location || '', points: null, timeLimit: null, url: null, submitted: false, graded: false,
       source: f.source || 'announcement', // 'syllabus' events come from Syllabus scan
+      found: f,
       instructions: `From the ${f.source === 'syllabus' ? 'syllabus' : 'announcement'}:\n“${f.quote}”`, sourceAnnouncement: f.source === 'syllabus' ? null : f.annId,
     };
   });

@@ -33,7 +33,7 @@ function fmtAgo(d) {
 }
 // Found in an announcement: announced exams, and events from the Smart Announcements feature. They have a start–end, not a due date.
 const announced = i => i.kind === 'exam' || i.kind === 'event';
-const foundIn = i => (i.source === 'syllabus' ? 'syllabus' : 'announcement'); // where a found event came from
+const foundIn = i => (i.source === 'syllabus' ? 'syllabus' : i.source === 'slack' ? 'Slack' : 'announcement'); // where a found event came from
 const EVENT_KIND = { exam: 'Exam', review: 'Review session', help: 'Help session', deadline: 'Deadline', 'class-change': 'Class change', optional: 'Event' };
 const dueLabel = i => (i.allDay ? 'all day' : i.end && announced(i) ? `${fmtTime(i.due)}–${fmtTime(i.end)}` : fmtTime(i.due));
 const rangeLabel = i => `${fmtDay(i.rangeStart)} – ${fmtDay(i.due)}${i.allDay ? '' : ' ' + fmtTime(i.due)}`;
@@ -170,7 +170,7 @@ function renderTabs() {
 function itemRow(i, { showDay = false } = {}) {
   const badges = [];
   if (i.exam) badges.push(h('span', { class: 'badge b-exam' }, announced(i) ? `EXAM · from ${foundIn(i)}` : 'EXAM'));
-  else if (i.kind === 'event') badges.push(h('span', { class: 'badge b-found', title: `Found in ${foundIn(i) === 'syllabus' ? 'the syllabus' : 'an announcement'}` }, `✦ ${EVENT_KIND[i.eventKind] || 'Event'} · from ${foundIn(i)}`));
+  else if (i.kind === 'event') badges.push(h('span', { class: 'badge b-found', title: `Found in ${foundIn(i)}` }, `✦ ${EVENT_KIND[i.eventKind] || 'Event'} · from ${foundIn(i)}`));
   if (i.rangeStart && !i.done && i.st !== 'overdue') { if (i.st !== 'today') badges.push(h('span', { class: 'badge b-info' }, rangeLabel(i))); } // under Today, a running range needs no badge
   else if (i.st === 'overdue') badges.push(h('span', { class: 'badge b-overdue' }, `⚠ OVERDUE · ${fmtDay(i.due)}`));
   else if (i.st === 'today') badges.push(h('span', { class: 'badge b-today' }, `TODAY ${dueLabel(i)}`));
@@ -461,7 +461,7 @@ function openItem(i) {
   if (i.kind === 'task') return openTaskForm(data.tasks.find(t => t.id === i.id));
   const rows = [
     ['Course', courseOf(i)?.name || ''],
-    ['Type', i.kind === 'exam' ? 'Exam (found in an announcement)' : i.kind === 'event' ? `${EVENT_KIND[i.eventKind] || 'Event'} (found in ${foundIn(i) === 'syllabus' ? 'the syllabus' : 'an announcement'})` : `${i.kind === 'quiz' ? 'Quiz' : 'Assignment'}${i.exam ? ' · exam' : ''}`],
+    ['Type', i.kind === 'exam' ? 'Exam (found in an announcement)' : i.kind === 'event' ? `${EVENT_KIND[i.eventKind] || 'Event'} (from ${foundIn(i)})` : `${i.kind === 'quiz' ? 'Quiz' : 'Assignment'}${i.exam ? ' · exam' : ''}`],
     i.due && [announced(i) && i.eventKind !== 'deadline' ? 'When' : 'Due', announced(i) ? `${i.allDay ? fmtDay(i.due) + ' · all day' : fmtFull(i.due)}${i.end ? ' – ' + fmtTime(i.end) : ''}` : fmtFull(i.due)],
     i.location && ['Where', i.location],
     i.start && ['Opens', fmtFull(i.start)],
@@ -476,6 +476,7 @@ function openItem(i) {
     i.instructions ? [h('strong', {}, 'Instructions'), h('div', { class: 'instr' }, linkNodes(i.instructions))] : null,
     noteEditor(i),
     studyButton(i),
+    i.kind === 'exam' && i.sourceAnnouncement ? h('p', {}, h('button', { type: 'button', onclick: () => editAnnouncedExam(i) }, 'Edit date & time')) : null,
     ...hooks.itemDetails.flatMap(f => f(i, lastModel) || []),
     h('p', { class: 'links' }, ...brightspaceLinks(i),
       announced(i) && i.sourceAnnouncement ? h('a', { href: announcementUrl(brightspaceOrigin(data.items), i.courseId, i.sourceAnnouncement), target: '_blank', rel: 'noopener noreferrer' }, 'Open the announcement in Brightspace ↗') : null, ' ',
@@ -484,11 +485,36 @@ function openItem(i) {
   $('#dlgItem').showModal();
 }
 
+function editAnnouncedExam(i) {
+  const hm = d => d ? `${String(new Date(d).getHours()).padStart(2, '0')}:${String(new Date(d).getMinutes()).padStart(2, '0')}` : '';
+  const error = h('p', { class: 'warn', role: 'alert' });
+  const form = h('form', { class: 'event-form' },
+    h('h2', {}, 'Edit exam date & time'),
+    h('p', {}, i.title), error,
+    h('div', { class: 'row' },
+      h('label', {}, 'Date', h('input', { type: 'date', name: 'date', required: true, value: dayKey(i.due) })),
+      h('label', {}, 'Start', h('input', { type: 'time', name: 'start', value: i.allDay ? '' : hm(i.due) })),
+      h('label', {}, 'End', h('input', { type: 'time', name: 'end', value: hm(i.end) }))),
+    h('p', { class: 'muted' }, 'Leave the start empty for an all-day exam.'),
+    h('div', { class: 'dlg-actions' }, h('button', { type: 'button', onclick: () => dlg.close() }, 'Cancel'), h('span', { class: 'spacer' }), h('button', { class: 'primary' }, 'Save changes')));
+  const dlg = h('dialog', {}, form);
+  dlg.addEventListener('close', () => dlg.remove());
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    try {
+      await api('/api/announced-exam', { id: i.id, ...Object.fromEntries(new FormData(form)) });
+      dlg.close(); await load();
+    } catch (err) { error.textContent = err.message; }
+  });
+  document.body.append(dlg); $('#dlgItem').close(); dlg.showModal();
+}
+
 // Past-due assignments: Brightspace answers 403 on the (closed) submission page, so lead with the course's assignment list.
 function brightspaceLinks(i) {
   if (!i.url) return [];
   const ext = (href, text, cls) => h('a', { href, target: '_blank', rel: 'noopener noreferrer', class: cls }, text);
   if (['labflow', 'macmillan', 'pearson'].includes(i.source)) return [ext(i.url, `Open in ${i.sourceName} ↗`)];
+  if (i.source === 'slack') return [ext(i.url, 'Open message in Slack ↗')];
   if (i.kind === 'assignment' && i.due && new Date(i.due) < new Date())
     return [ext(assignmentListUrl(brightspaceOrigin(data.items), i.courseId), 'Open course assignments in Brightspace ↗'), ' ', ext(i.url, 'Submission page ↗ (may be closed)', 'minor')];
   return [ext(i.url, 'Open in Brightspace ↗')];
@@ -613,6 +639,23 @@ $('#taskDelete').onclick = async () => {
 };
 
 // ----- ⚙ Settings -----
+hooks.settings.push({ id: 'slack', title: 'Slack', visible: () => !!data?.slack, render: box => {
+  const token = h('input', { type: 'password', autocomplete: 'off', placeholder: 'xoxp-…', 'aria-label': 'Slack User OAuth Token' });
+  const result = h('p', { class: 'muted', role: 'status' });
+  const accounts = (data.slack?.accounts || []).map(a => h('div', { class: 'feature-row' },
+    h('strong', {}, `${a.teamName} · ${a.userName}`), ' ',
+    h('small', { class: 'muted' }, a.error || (a.syncedAt ? `Last synced ${fmtAgo(a.syncedAt)}` : 'Waiting for first sync')), ' ',
+    h('button', { type: 'button', onclick: async () => { await api('/api/slack/disconnect', { id: a.id }); await load(); showSettingsSection('slack'); } }, 'Disconnect')));
+  box.replaceChildren(h('h2', {}, 'Slack clubs'),
+    h('p', {}, 'Connect each Slack account once. Mentions from any channel are checked automatically; club labels come from the workspace or channel name.'),
+    ...accounts,
+    h('p', {}, h('a', { href: 'https://api.slack.com/apps', target: '_blank', rel: 'noopener noreferrer' }, 'Create a Slack app ↗'),
+      ' · Add the User Token Scope search:read, install it to your workspace, then copy its User OAuth Token here. A workspace admin may need to approve the app.'),
+    h('label', {}, 'User OAuth Token ', token), ' ',
+    h('button', { type: 'button', onclick: async () => { try { result.textContent = 'Connecting…'; await api('/api/slack/connect', { token: token.value.trim() }); token.value = ''; await load(); showSettingsSection('slack'); } catch (e) { result.textContent = e.message; } } }, 'Connect account'),
+    h('button', { type: 'button', onclick: async () => { result.textContent = 'Checking mentions…'; await api('/api/slack/sync', {}); await load(); showSettingsSection('slack'); } }, 'Sync now'), result,
+    h('p', { class: 'muted' }, 'Slack tokens are protected by your Windows account. Claude reads complex event wording when available; dated events still work when Claude is unavailable.'));
+} });
 let settingsSection = 'courses';
 // Feature sections (e.g. Google Calendar) appear as extra tabs while their feature is on.
 function renderSettingsNav() {

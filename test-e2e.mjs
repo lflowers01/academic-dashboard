@@ -276,6 +276,23 @@ async function run(browserName) {
       await page.keyboard.press('Escape');
     });
 
+    await step('announced exam date can be edited from its details', async () => {
+      const { items } = await (await fetch(srv.base + '/api/data')).json();
+      const ex = items.find(i => i.kind === 'exam');
+      await page.goto(`${srv.base}/#item=${encodeURIComponent(ex.id)}`);
+      await page.waitForFunction(() => document.querySelector('#dlgItem').open);
+      await page.click('#itemBody button:has-text("Edit date & time")');
+      const form = page.locator('dialog[open] .event-form');
+      const original = await form.locator('input[name=date]').inputValue();
+      const next = new Date(`${original}T12:00`); next.setDate(next.getDate() + 1);
+      const date = [next.getFullYear(), String(next.getMonth() + 1).padStart(2, '0'), String(next.getDate()).padStart(2, '0')].join('-');
+      await form.locator('input[name=date]').fill(date);
+      await form.getByRole('button', { name: 'Save changes' }).click();
+      await page.waitForFunction(() => !document.querySelector('dialog[open]'));
+      const changed = (await (await fetch(srv.base + '/api/data')).json()).items.find(i => i.id === ex.id);
+      assert.equal(new Date(changed.due).toLocaleDateString('en-CA'), new Date(`${date}T12:00`).toLocaleDateString('en-CA'));
+    });
+
     await step('clicking an announcement opens it in full with a Brightspace link', async () => {
       await page.click('#tabAnn');
       const card = page.locator('.ann').first();

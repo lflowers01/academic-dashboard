@@ -47,7 +47,7 @@ export function foundUI({ kind, title, pref, api, on, list, from, source, remove
   document.body.append(dlg);
   function openForm(f, error) {
     const form = h('form', { method: 'dialog', class: 'event-form' },
-      h('h2', {}, 'Add to your calendar'),
+      h('h2', {}, f.status === 'added' ? 'Edit calendar event' : 'Add to your calendar'),
       h('p', { class: 'muted' }, '“', f.quote, '”'),
       error ? h('p', { class: 'warn', role: 'alert' }, error) : null,
       h('label', {}, 'Title', h('input', { name: 'title', required: true, maxlength: 120, value: f.title })),
@@ -59,7 +59,7 @@ export function foundUI({ kind, title, pref, api, on, list, from, source, remove
       h('label', {}, 'Location', h('input', { name: 'location', maxlength: 120, value: f.location || '' })),
       h('div', { class: 'dlg-actions' },
         h('button', { value: 'cancel', formnovalidate: true }, 'Cancel'), h('span', { class: 'spacer' }),
-        h('button', { class: 'primary', value: 'save' }, 'Add to calendar')));
+        h('button', { class: 'primary', value: 'save' }, f.status === 'added' ? 'Save changes' : 'Add to calendar')));
     form.addEventListener('submit', async e => {
       if (e.submitter?.value !== 'save') return;
       e.preventDefault();
@@ -80,6 +80,7 @@ export function foundUI({ kind, title, pref, api, on, list, from, source, remove
       document.querySelector('#dlgItem').close();
       decide(i.id, 'remove');
     } }, 'Remove from calendar');
-    return [h('p', { class: 'muted' }, removeNote, ' ', b)];
+    return [h('p', { class: 'muted' }, removeNote, ' ',
+      h('button', { type: 'button', onclick: () => { document.querySelector('#dlgItem').close(); openForm(i.found); } }, 'Edit date & time'), ' ', b)];
   });
 }

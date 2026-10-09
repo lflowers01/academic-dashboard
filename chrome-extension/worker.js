@@ -1,9 +1,10 @@
-import { PROVIDER_IDS, validProviderSettings } from './config.js';
+import { PROVIDER_IDS, validProviderSettings, validDashboardUrl } from './config.js';
 
 const DEFAULTS = { dashboard: 'http://localhost:4321', automatic: true };
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const config = async () => {
   const settings = { ...DEFAULTS, ...(await chrome.storage.local.get([...Object.keys(DEFAULTS), ...PROVIDER_IDS])) };
+  settings.dashboard = validDashboardUrl(settings.dashboard) || DEFAULTS.dashboard;
   if (PROVIDER_IDS.some(provider => validProviderSettings(provider, settings[provider]))) return settings;
   try {
     const previous = await fetch(`${settings.dashboard}/api/external`).then(response => response.json());

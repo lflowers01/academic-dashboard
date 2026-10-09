@@ -1,7 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { providerUrl, validProviderSettings } from './chrome-extension/config.js';
+import { providerUrl, validProviderSettings, validDashboardUrl } from './chrome-extension/config.js';
+
+test('dashboard address supports a custom local port only', () => {
+  assert.equal(validDashboardUrl('http://localhost:5055/'), 'http://localhost:5055');
+  assert.equal(validDashboardUrl('http://evil.example:5055'), null);
+  assert.equal(validDashboardUrl('http://localhost:5055/redirect'), null);
+});
 
 test('provider course pages are recognized and normalized without user-specific defaults', () => {
   assert.deepEqual(providerUrl('https://courses.catalystedu.com/app/course/demo-course/'), {
