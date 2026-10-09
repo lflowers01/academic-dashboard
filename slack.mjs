@@ -7,9 +7,24 @@ import { addDays, dayKey, featureOn, findDate, findTimes } from './logic.mjs';
 const EVENT_WORD = /\b(meet(?:ing)?|event|workshop|social|practice|rehearsal|training|session|presentation|competition|volunteer|fundraiser|dinner|lunch|party|orientation|deadline|due)\b/i;
 const SLACK_API = 'https://slack.com/api/';
 const CLUB_WORDS = /\b(orbital|per)\b/i;
+const GROUP_PING = /<!(?:channel|here|everyone)(?:\|[^>]+)?>/;
 const localDate = (date, hm) => { const d = new Date(date); d.setHours(hm?.[0] ?? 23, hm?.[1] ?? 59, 0, 0); return d; };
 const hashId = s => parseInt(createHash('sha256').update(s).digest('hex').slice(0, 7), 16);
-const cleanSlack = s => String(s || '').replace(/<@[A-Z0-9]+(?:\|[^>]+)?>/g, '').replace(/<([^|>]+)\|([^>]+)>/g, '$2').replace(/\s+/g, ' ').trim();
+const cleanSlack = s => String(s || '').replace(/<@[A-Z0-9]+(?:\|[^>]+)?>/g, '').replace(/<!(?:channel|here|everyone)(?:\|[^>]+)?>/g, '').replace(/<([^|>]+)\|([^>]+)>/g, '$2').replace(/\s+/g, ' ').trim();
+const mentioned = (text, userId) => text.includes(`<@${userId}>`) || text.includes(`<@${userId}|`) || GROUP_PING.test(text);
+export function slackDate(text, posted) {
+  const explicit = findDate(text, posted);
+  if (explicit) return explicit;
+  if (/\btoday\b/i.test(text)) return new Date(posted);
+  if (/\btomorrow\b/i.test(text)) return addDays(posted, 1);
+  const weekdays = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+  const word = text.match(/\b(?:(next|this)\s+)?(sun(?:day)?|mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?)\b/i);
+  if (!word) return null;
+  const day = weekdays.findIndex(x => x.startsWith(word[2].toLowerCase().slice(0, 3)));
+  let offset = (day - posted.getDay() + 7) % 7;
+  if (word[1]?.toLowerCase() === 'next' && offset === 0) offset = 7;
+  return addDays(posted, offset);
+}
 
 export function clubName(team, channel) {
   const match = String(channel || '').match(CLUB_WORDS) || String(team || '').match(CLUB_WORDS);
@@ -18,10 +33,10 @@ export function clubName(team, channel) {
 
 export function eventFromSlack(message, account, now = new Date()) {
   const raw = String(message?.text || '');
-  if (!raw.includes(`<@${account.userId}>`) && !raw.includes(`<@${account.userId}|`)) return null;
+  if (!mentioned(raw, account.userId)) return null;
   const posted = new Date(Number(message.ts) * 1000);
   if (Number.isNaN(+posted)) return null;
-  const date = findDate(raw, posted);
+  const date = slackDate(raw, posted);
   if (!date || date < addDays(posted, -2) || date > addDays(posted, 300)) return null;
   const times = findTimes(raw);
   if (!EVENT_WORD.test(raw) && !times) return null;
@@ -104,12 +119,14 @@ export function createSlack({ state, readJson, writeJson, log, request = fetch, 
         try {
           const token = open(account.secret);
           const after = dayKey(addDays(new Date(), -14));
-          let page = 1, modelCalls = 0;
+          let modelCalls = 0;
+          for (const term of [`<@${account.userId}>`, 'channel', 'here', 'everyone']) {
+          let page = 1;
           while (page <= 10) {
-            const result = await api(token, 'search.messages', { query: `<@${account.userId}> after:${after}`, sort: 'timestamp', sort_dir: 'desc', count: 100, page });
+            const result = await api(token, 'search.messages', { query: `${term} after:${after}`, sort: 'timestamp', sort_dir: 'desc', count: 100, page });
             const matches = result.messages?.matches || [];
             for (const message of matches) {
-              if (!String(message.text || '').includes(`<@${account.userId}>`) && !String(message.text || '').includes(`<@${account.userId}|`)) continue;
+              if (!mentioned(String(message.text || ''), account.userId)) continue;
               const id = `slack:${account.teamId}:${message.channel?.id}:${message.ts}`;
               const fingerprint = createHash('sha256').update(String(message.text)).digest('hex');
               if (store.seen[id] === fingerprint) continue;
@@ -122,6 +139,7 @@ export function createSlack({ state, readJson, writeJson, log, request = fetch, 
             }
             if (matches.length < 100 || page >= (result.messages?.paging?.pages || 1)) break;
             page++;
+          }
           }
           account.error = null; account.syncedAt = new Date().toISOString();
           save();
