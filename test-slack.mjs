@@ -38,6 +38,7 @@ test('multiple Slack accounts sync separately and a disabled feature hides event
   };
   const slack = createSlack({ state, readJson: () => stored, writeJson: (_name, value) => { stored = structuredClone(value); }, log: () => {}, request,
     seal: s => `encrypted:${s}`, open: s => s.slice(10), claude: async () => ({ body: { event: null } }) });
+  await assert.rejects(slack.connect('xoxb-bot-token'), /User OAuth Token.*xoxp-/);
   await slack.connect('xoxp-aaaaaaaaaaaaaaaaaaaa');
   await slack.connect('xoxp-bbbbbbbbbbbbbbbbbbbb');
   assert.equal(slack.payload().accounts.length, 2);

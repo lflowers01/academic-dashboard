@@ -74,7 +74,7 @@ export function createSlack({ state, readJson, writeJson, log, request = fetch, 
     return body;
   }
   async function connect(token) {
-    if (!/^xoxp-[A-Za-z0-9-]{20,}$/.test(token)) throw new Error('Use a Slack user token with search:read permission.');
+    if (!token.startsWith('xoxp-')) throw new Error('This is not a Slack User OAuth Token. In your Slack app, open OAuth & Permissions and copy the User OAuth Token (starts with xoxp-). Bot tokens (xoxb-) and ChatGPT connector tokens cannot be used here.');
     const identity = await api(token, 'auth.test');
     if (!identity.user_id || !identity.team_id) throw new Error('Slack did not identify this account.');
     await api(token, 'search.messages', { query: `<@${identity.user_id}> after:${dayKey(addDays(new Date(), -1))}`, count: 1 });
