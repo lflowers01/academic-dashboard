@@ -273,6 +273,7 @@ async function tick() {
   const retry = meta.nextRetryAt && now >= new Date(meta.nextRetryAt);
   const slot = !meta.nextRetryAt && refreshDue(now, meta.lastAttemptAt);
   if (!retry && !slot) return;
+  if (slot && !FIXTURE) try { await slack.scanWindows(); } catch (e) { log(`Slack notification scan failed: ${e.message}`); }
   if (meta.paused) { // signed out: don't touch Brightspace (MFA prompts), but keep reminding from cached data
     if (slot) { meta.lastAttemptAt = now.toISOString(); await sendDigest('scheduled, signed out'); }
     return;
@@ -375,7 +376,14 @@ const server = http.createServer(async (req, res) => {
       const b = await readBody(req);
       return send(res, slack.disconnect(String(b.id || '')) ? 200 : 404, { ok: true });
     }
-    if (p === '/api/slack/sync' && req.method === 'POST') { await slack.sync(); return send(res, 200, slack.payload()); }
+    if (p === '/api/slack/import' && req.method === 'POST') {
+      try { return send(res, 200, slack.importMessages(await readBody(req))); }
+      catch (e) { return send(res, 400, { error: e.message }); }
+    }
+    if (p === '/api/slack/sync' && req.method === 'POST') {
+      if (!FIXTURE) await slack.scanWindows();
+      await slack.sync(); return send(res, 200, slack.payload());
+    }
 
     if (p === '/api/refresh' && req.method === 'POST') {
       meta.paused = false; // a manual refresh is allowed to try sign-in again

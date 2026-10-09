@@ -647,10 +647,14 @@ hooks.settings.push({ id: 'slack', title: 'Slack', visible: () => !!data?.slack,
     h('strong', {}, `${a.teamName} · ${a.userName}`), ' ',
     h('small', { class: 'muted' }, a.error || (a.syncedAt ? `Last synced ${fmtAgo(a.syncedAt)}` : 'Waiting for first sync')), ' ',
     h('button', { type: 'button', onclick: async () => { await api('/api/slack/disconnect', { id: a.id }); await load(); showSettingsSection('slack'); } }, 'Disconnect')));
+  const connectorAccounts = (data.slack?.connectorAccounts || []).map(a => h('p', {}, `${a.teamName} · connected through Codex · last checked ${fmtAgo(a.syncedAt)}`));
+  const notificationAccounts = (data.slack?.notificationAccounts || []).map(a => h('p', {}, `${a.teamName} · Windows notifications · last checked ${fmtAgo(a.syncedAt)}`));
   box.replaceChildren(h('h2', {}, 'Slack clubs'),
-    h('p', {}, 'Connect each Slack account once. Mentions from any channel are checked automatically; club labels come from the workspace or channel name.'),
+    h('p', {}, 'The dashboard checks Slack notifications already on this PC every three hours and when you press Sync now. Keep your Slack accounts signed in on the desktop and turn on message previews in Slack → Preferences → Notifications. No Slack app, token, or AI usage is needed. The event must be visible in the notification.'),
+    ...notificationAccounts,
+    ...connectorAccounts,
     ...accounts,
-    h('p', {}, '1. ', h('a', { href: slackAppUrl, target: '_blank', rel: 'noopener noreferrer' }, 'Open Slack app setup ↗'), ' and sign in to the Slack account you want to connect. Choose its workspace, then create the preconfigured app.'),
+    h('p', {}, 'Optional direct connection (checks every five minutes): 1. ', h('a', { href: slackAppUrl, target: '_blank', rel: 'noopener noreferrer' }, 'Open Slack app setup ↗'), ' and sign in to the Slack account you want to connect. Choose its workspace, then create the preconfigured app.'),
     h('p', {}, '2. In the new app, open OAuth & Permissions and click Install to Workspace (or Reinstall to Workspace). If Slack asks for approval, ask a workspace admin.'),
     h('p', {}, '3. On that same page, copy User OAuth Token (starts with xoxp-) and paste it below. Do not copy Bot User OAuth Token (xoxb-). Repeat for each separate Slack account. The ChatGPT Slack connector is separate.'),
     h('label', {}, 'User OAuth Token ', token), ' ',
