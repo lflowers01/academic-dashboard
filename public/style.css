@@ -328,6 +328,9 @@ dialog.chooser { width: min(420px, calc(100vw - 32px)); }
 .update-pill { border-color: #cfb991; color: #cfb991; }
 .update-pill:hover { background: color-mix(in srgb, #cfb991 14%, transparent); }
 .settings-about { margin: 18px 0 0; padding-top: 10px; border-top: 1px solid var(--line); font-size: 12px; }
+.external-status { margin-top: 16px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: #090909; }
+.external-status p { margin: 7px 0; }
+.external-status .error { color: #ff9b9b; }
 .linklike { border: 0; background: none; padding: 0; color: var(--text); text-decoration: underline; font-size: inherit; cursor: pointer; }
 .update-dlg { max-width: 560px; }
 .update-notes { max-height: 280px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; margin: 10px 0; font-size: 13px; }

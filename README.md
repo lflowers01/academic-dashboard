@@ -17,6 +17,8 @@ Runs privately on your own PC and opens in your browser.
 
 ## Features
 
+Labflow, Macmillan Achieve, and Pearson MyLab assignments can be imported with the included local Chrome extension. Its first-run setup detects the course page you have open and lets you choose the matching Brightspace course by name, so no source-code editing or AI assistant is required. It uses your existing signed-in Chrome tabs, refreshes every three hours, and works without Codex or Claude. See `chrome-extension/README.md`.
+
 - **To-do list**: overdue, due today, tomorrow and this week, with a checkbox to mark things done. Submitted assignments tick themselves.
 - **Calendar** (month, week or day): every due date, color-coded by course, plus **when quizzes open**.
 - **Exams stand out in gold**: exam quizzes, *and* exam dates your instructors post in announcements, are found automatically.

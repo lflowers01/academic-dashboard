@@ -33,7 +33,7 @@ function makeRelease(dir, version) {
   fs.writeFileSync(path.join(src, 'package.json'), JSON.stringify({ ...pkg, version }, null, 2));
   fs.writeFileSync(path.join(src, 'UPDATED.txt'), version);
   const zip = path.join(dir, `release-${version}.zip`);
-  execFileSync('powershell', ['-NoProfile', '-Command', 'Compress-Archive -Path $env:SRC -DestinationPath $env:ZIP -Force'], { env: { ...process.env, SRC: src, ZIP: zip }, windowsHide: true });
+  execFileSync('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', 'Import-Module Microsoft.PowerShell.Archive -ErrorAction Stop; Compress-Archive -Path $env:SRC -DestinationPath $env:ZIP -Force'], { env: { ...process.env, SRC: src, ZIP: zip }, windowsHide: true });
   fs.rmSync(path.join(dir, 'rel'), { recursive: true, force: true });
   return zip;
 }

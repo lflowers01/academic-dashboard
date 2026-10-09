@@ -82,7 +82,7 @@ export function createUpdater({ root, dataDir, readJson, writeJson, log, onResta
 
       step('Checking');
       // paths go to PowerShell through the environment, never through the command text
-      await run('powershell', ['-NoProfile', '-NonInteractive', '-Command', 'Expand-Archive -LiteralPath $env:DASH_ZIP -DestinationPath $env:DASH_OUT -Force'],
+      await run('powershell', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', 'Import-Module Microsoft.PowerShell.Archive -ErrorAction Stop; Expand-Archive -LiteralPath $env:DASH_ZIP -DestinationPath $env:DASH_OUT -Force'],
         { env: { ...process.env, DASH_ZIP: zip, DASH_OUT: path.join(tmp, 'x') } });
       const src = path.join(tmp, 'x', 'academic-dashboard');
       const pkg = JSON.parse(fs.readFileSync(path.join(src, 'package.json'), 'utf8'));

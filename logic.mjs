@@ -435,6 +435,7 @@ export const sundayOf = d => { d = startOfDay(d); return addDays(d, -d.getDay())
 // Each entry is off unless the user turns it on (state.features[id] === true). Add future features here.
 export const GCAL_WINDOW = { back: 7, ahead: 42 }; // days around today that a sync reads
 export const FEATURES = [
+  { id: 'externalAssignments', name: 'Labflow, Macmillan & Pearson assignments', description: 'Imports deadlines from the signed-in course pages in Chrome and refreshes them every 3 hours. Uses the included local Chrome extension; no AI assistant is required.' },
   { id: 'googleCalendar', name: 'Google Calendar', description: `See and manage events from Google calendars you choose, next to your Brightspace work. Syncs events from ${GCAL_WINDOW.back / 7} week back to ${GCAL_WINDOW.ahead / 7} weeks ahead; other months load when you ask. Uses the Google Calendar connector in Claude (Claude Code required).` },
   { id: 'syllabusScan', name: 'Syllabus scan', description: 'Reads each class\'s syllabus (from Brightspace, or files you add) and puts its exams and deadlines on your calendar, the same careful way Smart Announcements does. It also reads the grading scheme for the Grades tab. Uses Claude (Claude Code required).' },
   { id: 'smartAnnouncements', name: 'Smart Announcements', description: 'Finds dated events in new announcements (review sessions, help rooms, exams, deadlines, class changes). Class events it is sure about are added to your calendar; the rest wait for you to accept, edit or decline. Uses Claude (Claude Code required).' },
