@@ -1,13 +1,16 @@
 // Optional Slack mention sync. Each account is authorized once; workspaces/channels supply club names automatically.
-import { execFileSync } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 import { askClaude } from './claude-json.mjs';
 import { addDays, dayKey, featureOn, findDate, findTimes } from './logic.mjs';
 
-const EVENT_WORD = /\b(meet(?:ing)?|event|workshop|social|practice|rehearsal|training|session|presentation|competition|volunteer|fundraiser|dinner|lunch|party|orientation|deadline|due)\b/i;
+const EVENT_WORD = /\b(meet(?:ing)?|event|workshop|social|practice|rehearsal|training|session|presentation|competition|volunteer|fundraiser|dinner|lunch|party|orientation|deadline|due|mix|mark your calendars?)\b/i;
 const SLACK_API = 'https://slack.com/api/';
 const CLUB_WORDS = /\b(orbital|per)\b/i;
 const GROUP_PING = /<!(?:channel|here|everyone)(?:\|[^>]+)?>/;
+const cancelled = /\b(?:no|cancelled|canceled|postponed)\s+(?:\w+\s+){0,2}(?:meeting|event|practice|workshop)\b/i;
 const localDate = (date, hm) => { const d = new Date(date); d.setHours(hm?.[0] ?? 23, hm?.[1] ?? 59, 0, 0); return d; };
 const hashId = s => parseInt(createHash('sha256').update(s).digest('hex').slice(0, 7), 16);
 const cleanSlack = s => String(s || '').replace(/<@[A-Z0-9]+(?:\|[^>]+)?>/g, '').replace(/<!(?:channel|here|everyone)(?:\|[^>]+)?>/g, '').replace(/<([^|>]+)\|([^>]+)>/g, '$2').replace(/\s+/g, ' ').trim();
@@ -27,6 +30,7 @@ export function slackDate(text, posted) {
 }
 
 export function clubName(team, channel) {
+  if (/\bpurdue electric racing\b/i.test(String(team || ''))) return 'PER';
   const match = String(channel || '').match(CLUB_WORDS) || String(team || '').match(CLUB_WORDS);
   return match ? (match[1].toLowerCase() === 'per' ? 'PER' : 'Orbital') : String(team || channel || 'Club').slice(0, 60);
 }
@@ -34,6 +38,7 @@ export function clubName(team, channel) {
 export function eventFromSlack(message, account, now = new Date()) {
   const raw = String(message?.text || '');
   if (!mentioned(raw, account.userId)) return null;
+  if (cancelled.test(raw)) return null;
   const posted = new Date(Number(message.ts) * 1000);
   if (Number.isNaN(+posted)) return null;
   const date = slackDate(raw, posted);
@@ -47,7 +52,8 @@ export function eventFromSlack(message, account, now = new Date()) {
   return { id: `slack:${account.teamId}:${message.channel?.id}:${message.ts}`, courseId: -hashId(`${account.teamId}:${club}`),
     kind: 'event', source: 'slack', club, title: title || `${club} event`, due: due.toISOString(),
     end: times?.end ? localDate(date, times.end).toISOString() : null, allDay: !times,
-    start: null, points: null, timeLimit: null, url: /^https:\/\/[^/]+\.slack\.com\/archives\//.test(message.permalink || '') ? message.permalink : null,
+    start: null, points: null, timeLimit: null, url: /^https:\/\/[^/]+\.slack\.com\/archives\//.test(message.permalink || '') ? message.permalink :
+      (/^[CGD][A-Z0-9]{4,19}$/.test(message.channel?.id || '') && /^T[A-Z0-9]{4,19}$/.test(account.teamId || '') && /^\d{9,11}\.\d+$/.test(message.ts || '') ? `slack://channel?id=${message.channel.id}&message=${message.ts}&team=${account.teamId}` : null),
     instructions: cleanSlack(raw).slice(0, 2000), submitted: false, graded: false };
 }
 
@@ -59,9 +65,13 @@ const protect = token => execFileSync('powershell', ['-NoProfile', '-NonInteract
 const unprotect = value => execFileSync('powershell', ['-NoProfile', '-NonInteractive', '-Command',
   'Add-Type -AssemblyName System.Security; [Text.Encoding]::UTF8.GetString([Security.Cryptography.ProtectedData]::Unprotect([Convert]::FromBase64String($env:DASH_SLACK_SECRET),$null,[Security.Cryptography.DataProtectionScope]::CurrentUser))'],
   { env: { ...process.env, DASH_SLACK_SECRET: value }, windowsHide: true, encoding: 'utf8' }).trim();
+const runFile = promisify(execFile);
+const notificationScript = fileURLToPath(new URL('./windows-slack-notifications.ps1', import.meta.url));
+const readNotifications = async () => JSON.parse((await runFile('powershell', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', notificationScript],
+  { windowsHide: true, encoding: 'utf8', timeout: 20_000, maxBuffer: 2_000_000 })).stdout);
 
-export function createSlack({ state, readJson, writeJson, log, request = fetch, seal = protect, open = unprotect, claude = askClaude }) {
-  const store = { accounts: [], events: [], seen: {}, ...readJson('slack.json', {}) };
+export function createSlack({ state, readJson, writeJson, log, request = fetch, seal = protect, open = unprotect, claude = askClaude, notifications = readNotifications }) {
+  const store = { accounts: [], connectorAccounts: [], notificationAccounts: [], notificationSeen: [], events: [], seen: {}, ...readJson('slack.json', {}) };
   let running = false, lastRun = null, lastError = null, lastTick = 0, claudeUnavailableUntil = 0;
   const on = () => featureOn(state, 'slack');
   const save = () => writeJson('slack.json', store);
@@ -91,6 +101,47 @@ export function createSlack({ state, readJson, writeJson, log, request = fetch, 
     store.events = store.events.filter(e => e.accountId !== id);
     if (store.accounts.length === before) return false;
     save(); return true;
+  }
+  function importMessages({ teamId, teamName, userId, messages }) {
+    if (!on()) throw new Error('Turn on Slack in Settings → Features first.');
+    if (!/^[A-Z0-9]{5,20}$/.test(teamId || '') || !/^[A-Z0-9]{5,20}$/.test(userId || '') || !Array.isArray(messages) || messages.length > 100)
+      throw new Error('Invalid Slack import.');
+    const account = { teamId, teamName: String(teamName || 'Slack').slice(0, 60), userId };
+    let added = 0;
+    for (const message of messages) {
+      if (typeof message?.text !== 'string' || message.text.length > 10_000 || !/^\d{9,11}\.\d+$/.test(String(message.ts || '')) || !/^[A-Z0-9]{5,20}$/.test(message.channel?.id || '')) continue;
+      const event = eventFromSlack(message, account);
+      if (!event) continue;
+      store.events = store.events.filter(e => e.id !== event.id);
+      store.events.push({ ...event, accountId: `connector:${teamId}:${userId}` });
+      added++;
+    }
+    store.connectorAccounts = [...store.connectorAccounts.filter(a => a.id !== `${teamId}:${userId}`),
+      { id: `${teamId}:${userId}`, teamName: account.teamName, syncedAt: new Date().toISOString() }];
+    save();
+    return { added };
+  }
+  async function scanWindows() {
+    if (!on()) return { added: 0 };
+    const rows = await notifications();
+    if (!Array.isArray(rows)) throw new Error('Windows returned invalid Slack notifications.');
+    const seen = new Set(store.notificationSeen);
+    let added = 0;
+    for (const row of rows) {
+      const key = `${row.id}:${row.arrival}`;
+      if (seen.has(key) || !/^T[A-Z0-9]{4,19}$/.test(row.teamId || '') || !/^[CGD][A-Z0-9]{4,19}$/.test(row.channelId || '') ||
+          !/^\d{9,11}\.\d+$/.test(row.ts || '') || typeof row.text !== 'string' || row.text.length > 10_000) continue;
+      seen.add(key);
+      const account = { teamId: row.teamId, teamName: String(row.teamName || 'Slack').slice(0, 60), userId: 'WINDOWS' };
+      const text = `<@WINDOWS> ${row.text.replace(/@(channel|here|everyone)\b/gi, '<!$1>')}`;
+      const event = eventFromSlack({ text, ts: row.ts, channel: { id: row.channelId, name: row.channelName }, permalink: row.url }, account);
+      if (event) { store.events = store.events.filter(e => e.id !== event.id); store.events.push({ ...event, accountId: `windows:${row.teamId}` }); added++; }
+      store.notificationAccounts = [...store.notificationAccounts.filter(a => a.id !== row.teamId),
+        { id: row.teamId, teamName: account.teamName, syncedAt: new Date().toISOString() }];
+    }
+    store.notificationSeen = [...seen].slice(-5000);
+    save();
+    return { added };
   }
   async function modelEvent(message, account) {
     if (Date.now() < claudeUnavailableUntil) return null;
@@ -151,8 +202,8 @@ export function createSlack({ state, readJson, writeJson, log, request = fetch, 
     } catch (e) { lastError = String(e.message).slice(0, 160); }
     finally { running = false; lastRun = new Date().toISOString(); }
   }
-  return { connect, disconnect, sync, tick: () => { if (on() && !running && Date.now() - lastTick > 5 * 60_000) sync(); },
+  return { connect, disconnect, importMessages, scanWindows, sync, tick: () => { if (on() && !running && Date.now() - lastTick > 5 * 60_000) sync(); },
     items: () => on() ? store.events : [],
     courses: () => on() ? [...new Map(store.events.map(e => [e.courseId, { id: e.courseId, name: `Club · ${e.club}`, short: e.club, code: `club.${e.club}` }])).values()] : [],
-    payload: () => on() ? { running, lastRun, lastError, accounts: store.accounts.map(({ id, teamName, userName, syncedAt, error }) => ({ id, teamName, userName, syncedAt, error })) } : null };
+    payload: () => on() ? { running, lastRun, lastError, accounts: store.accounts.map(({ id, teamName, userName, syncedAt, error }) => ({ id, teamName, userName, syncedAt, error })), connectorAccounts: store.connectorAccounts, notificationAccounts: store.notificationAccounts } : null };
 }

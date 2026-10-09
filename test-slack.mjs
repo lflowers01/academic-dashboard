@@ -54,3 +54,35 @@ test('multiple Slack accounts sync separately and a disabled feature hides event
   assert.equal(slack.disconnect('T1:U1'), true);
   assert.equal(slack.items().length, 2);
 });
+
+test('Codex connector messages import without a Slack app token', () => {
+  const state = { features: { slack: true } };
+  let stored = {};
+  const slack = createSlack({ state, readJson: () => stored, writeJson: (_name, value) => { stored = structuredClone(value); }, log: () => {} });
+  const message = { ts, text: '<!channel> Mark your calendars for a mix on November 21st.', channel: { id: 'C12345', name: 'mixing' }, permalink: 'https://purdueorbital.slack.com/archives/C12345/p123' };
+  const importData = { teamId: 'T12345', teamName: 'Purdue Orbital', userId: 'U12345', messages: [message] };
+  assert.deepEqual(slack.importMessages(importData), { added: 1 });
+  assert.deepEqual(slack.importMessages(importData), { added: 1 });
+  assert.equal(slack.items().length, 1);
+  assert.equal(slack.items()[0].club, 'Orbital');
+  assert.match(dayKey(slack.items()[0].due), /-11-21$/);
+  assert.equal(slack.payload().accounts.length, 0);
+  assert.equal(slack.payload().connectorAccounts[0].teamName, 'Purdue Orbital');
+  assert.throws(() => slack.importMessages({ ...importData, userId: 'bad' }), /Invalid Slack import/);
+});
+
+test('Windows Slack notifications become club events without AI or tokens', async () => {
+  const state = { features: { slack: true } };
+  let stored = {};
+  const row = { id: '1', arrival: '123456789', teamId: 'T12345', teamName: 'Purdue Electric Racing', channelId: 'C12345',
+    channelName: '#software', ts, text: 'Alex: @channel Software meeting tomorrow at 7:00 PM', url: 'slack://channel?id=C12345&message=123&team=T12345' };
+  const slack = createSlack({ state, readJson: () => stored, writeJson: (_name, value) => { stored = structuredClone(value); }, log: () => {}, notifications: async () => [row] });
+  assert.deepEqual(await slack.scanWindows(), { added: 1 });
+  assert.deepEqual(await slack.scanWindows(), { added: 0 });
+  assert.equal(slack.items()[0].club, 'PER');
+  assert.match(slack.items()[0].url, /^slack:\/\/channel\?/);
+  assert.equal(slack.payload().notificationAccounts[0].teamName, 'Purdue Electric Racing');
+  assert.equal(eventFromSlack({ text: '<@WINDOWS> No meeting tomorrow', ts, channel: { id: 'C12345' } }, { userId: 'WINDOWS', teamId: 'T12345' }), null);
+  state.features.slack = false;
+  assert.deepEqual(await slack.scanWindows(), { added: 0 });
+});

@@ -1,6 +1,6 @@
 {
   "name": "academic-dashboard",
-  "version": "1.6.3",
+  "version": "1.6.4",
   "description": "Local Purdue Brightspace dashboard for Windows: calendar, to-do list, exams, announcements and Windows notifications.",
   "private": true,
   "type": "module",
