@@ -46,6 +46,8 @@ test('normal refresh: data, exams, skipped courses, start-up digest', async () =
     assert.equal(d.term, '202710');
     const titles = d.items.map(i => i.title);
     assert.ok(titles.includes('HW 3') && titles.includes('Lab 5'));
+    assert.ok(titles.includes('Chapter 7 Quiz') && titles.includes('Chapter 12 Quiz'));
+    assert.equal(d.items.find(i => i.title === 'Chapter 12 Quiz').submitted, false); // visiting a link is not submitting its quiz
     // exam quiz flagged, practice quiz not, announced exam extracted
     assert.equal(d.items.find(i => i.title === 'Exam 2').exam, true);
     assert.equal(d.items.find(i => i.title === 'Exam 2 Practice Quiz').exam, false);
@@ -67,6 +69,27 @@ test('normal refresh: data, exams, skipped courses, start-up digest', async () =
     assert.match(toasts[0].url, /#due=bs%3A101%3Aassignment%3A1,bs%3A102%3Aassignment%3A4$/); // click highlights exactly those
     // Boilerexams: MA 16200 exists there, CS 15900 doesn't
     assert.deepEqual(d.boilerexams, { 101: 'MA16200' });
+  } finally { await s.stop(); }
+});
+
+test('an announced exam date can be edited and survives a restart', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dash-exam-edit-'));
+  let s = await startServer({ dir });
+  try {
+    const d = await s.settled();
+    const exam = d.items.find(i => i.kind === 'exam');
+    assert.ok(exam);
+    const date = dayKey(new Date(new Date(exam.due).getTime() + 2 * 864e5));
+    assert.equal((await s.post('/api/announced-exam', { id: 'bs:101:quiz:1', date, start: '10:00' })).status, 404);
+    assert.equal((await s.post('/api/announced-exam', { id: exam.id, date: '2026-02-31', start: '10:00' })).status, 400);
+    assert.equal((await s.post('/api/announced-exam', { id: exam.id, date, start: '10:00', end: '11:00' })).status, 200);
+    const changed = (await s.api('/api/data')).body.items.find(i => i.id === exam.id);
+    assert.equal(dayKey(changed.due), date);
+    assert.equal(new Date(changed.due).getHours(), 10);
+    assert.equal(new Date(changed.end).getHours(), 11);
+    await s.stop();
+    s = await startServer({ dir });
+    assert.equal(dayKey((await s.settled()).items.find(i => i.id === exam.id).due), date);
   } finally { await s.stop(); }
 });
 

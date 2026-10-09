@@ -14,7 +14,7 @@ import { newer } from './update.mjs';
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
 const freePort = () => new Promise(r => { const srv = net.createServer().listen(0, '127.0.0.1', () => { const p = srv.address().port; srv.close(() => r(p)); }); });
-const robocopy = (from, to) => { try { execFileSync('robocopy', [from, to, '/E', '/NFL', '/NDL', '/NJH', '/NJS', '/NP', '/XD', 'data', 'data-demo', 'node_modules', '.git'], { windowsHide: true }); } catch (e) { if (e.status >= 8) throw e; } };
+const robocopy = (from, to) => { try { execFileSync('robocopy', [from, to, '/E', '/NFL', '/NDL', '/NJH', '/NJS', '/NP', '/XD', 'data', 'data-demo', 'node_modules', '.git', 'promo', '/XF', '.git'], { windowsHide: true }); } catch (e) { if (e.status >= 8) throw e; } };
 const killPort = port => { try { const out = execFileSync('netstat', ['-ano'], { encoding: 'utf8' }); for (const l of out.split('\n')) { const m = l.match(new RegExp(`127\\.0\\.0\\.1:${port}\\s.*LISTENING\\s+(\\d+)`)); if (m) execFileSync('taskkill', ['/pid', m[1], '/T', '/F'], { stdio: 'ignore' }); } } catch {} };
 
 test('newer() compares versions numerically', () => {

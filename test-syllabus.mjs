@@ -90,6 +90,16 @@ test('off by default; turning it on reads each class: Brightspace overview + syl
     assert.equal(new Date(mid.due).getHours(), 20);
     assert.match(mid.instructions, /^From the syllabus:/);
     assert.equal(mid.sourceAnnouncement, null);
+    const movedDate = new Date(mid.found.date + 'T12:00'); movedDate.setDate(movedDate.getDate() + 1);
+    const date = [movedDate.getFullYear(), String(movedDate.getMonth() + 1).padStart(2, '0'), String(movedDate.getDate()).padStart(2, '0')].join('-');
+    assert.equal((await s.post('/api/syllabus/decide', { id: mid.id, action: 'accept', fields: { date } })).status, 200);
+    assert.equal((await s.data()).items.find(i => i.id === mid.id).found.date, date);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(s.dir, 'syllabus.json'))).found.find(f => f.id === mid.id).originalDate, mid.found.date);
+    const scannedAt = (await s.data()).syllabus.classes.find(c => c.id === 101).scannedAt;
+    await s.post('/api/syllabus/scan', { courseId: 101 });
+    const again = await s.until(d => !d.syllabus.running && d.syllabus.classes.find(c => c.id === 101).scannedAt !== scannedAt, 'rescan');
+    assert.equal(again.items.filter(i => i.id === mid.id).length, 1);
+    assert.equal(again.items.filter(i => i.source === 'syllabus' && i.courseId === 101 && i.title === mid.title).length, 1);
   } finally { await s.stop(); }
 });
 

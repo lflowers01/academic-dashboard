@@ -7,6 +7,7 @@ After setup it syncs when Chrome starts, every three hours, and when **Sync now*
 ## Install and connect courses
 
 1. Start the Academic Dashboard and let its first Brightspace refresh finish.
+   If you changed `DASH_PORT`, enter the dashboard's local address in the extension popup.
 2. Open `chrome://extensions`, enable **Developer mode**, choose **Load unpacked**, and select this `chrome-extension` folder.
 3. Open a Labflow, Achieve, or Pearson course page where its assignment list is available.
 4. Click the extension icon, then **Use current tab** beside that provider.

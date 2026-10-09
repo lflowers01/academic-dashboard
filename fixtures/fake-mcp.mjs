@@ -70,7 +70,10 @@ server.setRequestHandler(CallToolRequestSchema, async req => {
     : { courseId: args.courseId, description: { markdown: '' }, syllabusText: '' });
   if (name === 'get_course_content') return text(args.courseId === 102
     ? { modules: [{ type: 'module', title: 'Start Here', children: [{ type: 'topic', topicType: 'file', title: 'Course Syllabus', topicId: 77 }, { type: 'topic', topicType: 'file', title: 'Lecture 1 slides', topicId: 78 }] }] }
-    : { modules: [] });
+    : args.courseId === 101 ? { contentTree: [{ type: 'module', children: [
+      { type: 'topic', topicType: 'link', id: 90, title: 'Chapter 7 Quiz', dueDate: at(3, 8, 30), url: '/d2l/content/90', isCompleted: false },
+      { type: 'topic', topicType: 'link', id: 91, title: 'Chapter 12 Quiz', dueDate: at(3, 8, 30), url: '/d2l/content/91', isCompleted: true },
+    ] }] } : { modules: [] });
   if (name === 'download_file') {
     if (args.topicId !== 77) return { ...text('not found'), isError: true };
     mkdirSync(args.downloadPath, { recursive: true });

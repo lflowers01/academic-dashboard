@@ -98,6 +98,18 @@ async function run(browserName) {
       assert.equal((await s.data()).items.some(i => /wellness/i.test(i.title)), false);
     });
 
+    await step('edit an added announcement date from its details', async () => {
+      await page.locator('#todoList .item', { hasText: 'Industrial Roundtable' }).locator('.main').click();
+      await page.getByRole('button', { name: 'Edit date & time' }).click();
+      const date = await page.locator('#dlgSmart input[name=date]').inputValue();
+      const next = new Date(`${date}T12:00`); next.setDate(next.getDate() + 1);
+      const changed = [next.getFullYear(), String(next.getMonth() + 1).padStart(2, '0'), String(next.getDate()).padStart(2, '0')].join('-');
+      await page.fill('#dlgSmart input[name=date]', changed);
+      await page.click('#dlgSmart button[value=save]');
+      await page.waitForFunction(() => !document.querySelector('#dlgSmart').open);
+      assert.equal((await s.data()).items.find(i => i.title === 'Industrial Roundtable').found.date, changed);
+    });
+
     await step('a found event can be removed from its details (asks twice)', async () => {
       await page.locator('#todoList .item', { hasText: 'Industrial Roundtable' }).locator('.main').click();
       assert.match(await page.innerText('#itemBody'), /Found in an announcement/);

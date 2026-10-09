@@ -75,7 +75,7 @@ export function fetchAll(prev = {}) {
     if (!Array.isArray(courses)) throw new FetchError('network', 'Unexpected course list from Brightspace');
     const term = currentTerm(courses);
     const wanted = courses.filter(c => shouldFetch(c, term));
-    const raw = { courses, assignments: {}, grades: {}, announcements: prev.announcements || [] };
+    const raw = { courses, assignments: {}, content: {}, grades: {}, announcements: prev.announcements || [] };
     const failed = [];
     let authFailures = 0;
 
@@ -92,6 +92,10 @@ export function fetchAll(prev = {}) {
       ...wanted.map(async c => {
         try { raw.grades[c.id] = await call('get_my_grades', { courseId: c.id }); }
         catch { if (prev.grades?.[c.id]) raw.grades[c.id] = prev.grades[c.id]; }
+      }),
+      ...wanted.map(async c => {
+        try { raw.content[c.id] = await call('get_course_content', { courseId: c.id, maxDepth: 8 }, COURSE_TIMEOUT); }
+        catch { if (prev.content?.[c.id]) raw.content[c.id] = prev.content[c.id]; }
       }),
       (async () => { try { const a = await call('get_announcements', { count: 50 }); if (Array.isArray(a)) raw.announcements = a; } catch {} })(),
     ]);

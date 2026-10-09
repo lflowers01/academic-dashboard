@@ -3,10 +3,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { buildItems, refreshDue, nextSlot, shortName, currentTerm, viewModel, digestItems, digestMessage, digestLink, boilerexamsKey, FEATURES, isVisible, htmlToText, featureOn, cleanGradeConfig, courseTerm, onCalendar } from './logic.mjs';
+import { buildItems, refreshDue, nextSlot, shortName, currentTerm, viewModel, digestItems, digestMessage, digestLink, boilerexamsKey, FEATURES, isVisible, htmlToText, featureOn, cleanGradeConfig, courseTerm, onCalendar, dayKey, eventFields } from './logic.mjs';
 import { createGcal } from './gcal-routes.mjs';
 import { createSmart } from './smart-ann.mjs';
 import { createSyllabus } from './syllabus.mjs';
+import { createSlack } from './slack.mjs';
 import { createUpdater, restartServer } from './update.mjs';
 import { createExternalSync } from './external-sync.mjs';
 
@@ -91,7 +92,7 @@ let tasks = readJson('tasks.json', []);
 if (!Array.isArray(tasks)) tasks = [];
 // notes: your own notes on Brightspace items, by item id. Never pruned, so a note survives an item briefly vanishing.
 // features: optional features switched on in ⚙ Settings (all off by default).
-const STATE_DEFAULTS = { done: {}, seenAnnouncements: [], hiddenCourses: {}, calendarHidden: {}, notes: {}, features: {}, grades: {}, notifications: true, lastDigest: null };
+const STATE_DEFAULTS = { done: {}, seenAnnouncements: [], hiddenCourses: {}, calendarHidden: {}, notes: {}, examEdits: {}, features: {}, grades: {}, notifications: true, lastDigest: null };
 let state = { ...STATE_DEFAULTS, ...readJson('state.json', {}) };
 delete state.notified; // from the earlier per-item notification design
 const meta = { lastAttemptAt: null, lastError: null, paused: false, retryIndex: 0, nextRetryAt: null, refreshing: null, notifyBlocked: null };
@@ -148,6 +149,7 @@ const smart = createSmart({ state, readJson, writeJson, log, announcements: () =
 const syllabus = createSyllabus({ state, readJson, writeJson, log, dataDir: DATA, courses: () => coursesOf(cache?.raw),
   calendar: () => calendarWith(smart.items()), mine: () => myTasks(), visibleCourses: () => visibleCourses(),
   fetchSources: FIXTURE ? demoSyllabi : (ids, dir) => import('./brightspace.mjs').then(m => m.fetchSyllabusSources(ids, dir)) });
+const slack = createSlack({ state, readJson, writeJson, log });
 // demo: fixtures/demo-syllabi/<courseId>.html, with {{+Nd}} turned into a date N days from today
 async function demoSyllabi(ids) {
   const out = {};
@@ -168,14 +170,18 @@ const calendarWith = found => onCalendar({ items: [...brightspaceItems(), ...fou
 const myTasks = () => onCalendar({ tasks, shortById: shortById() });
 function itemsOf() {
   const imported = featureOn(state, 'externalAssignments') ? external.items() : [];
-  return [...brightspaceItems(), ...smart.items(), ...syllabus.items(), ...imported].map(i => ({ ...i, firstSeen: cache?.firstSeen?.[i.id] }));
+  return [...brightspaceItems(), ...smart.items(), ...syllabus.items(), ...slack.items(), ...imported].map(i => {
+    const edit = i.kind === 'exam' && i.sourceAnnouncement ? state.examEdits?.[i.id] : null;
+    return { ...i, ...(edit && { due: new Date(`${edit.date}T${edit.start || '23:59'}`).toISOString(),
+      end: edit.end ? new Date(`${edit.date}T${edit.end}`).toISOString() : null, allDay: !edit.start }), firstSeen: cache?.firstSeen?.[i.id] };
+  });
 }
 
 // ---------- notifications ----------
 // A digest of what's due today / early tomorrow, sent after start-up and after every scheduled refresh.
 async function sendDigest(reason) {
   if (FIXTURE || !state.notifications || !cache) return;
-  const courses = coursesOf(cache.raw);
+  const courses = [...coursesOf(cache.raw), ...slack.courses()];
   const now = new Date();
   const { all } = viewModel({ items: itemsOf(), tasks, courses, state, term: currentTerm(courses) }, now);
   const due = digestItems(all, now);
@@ -218,7 +224,7 @@ async function doRefresh() {
     }
     cache = { raw, refreshedAt: now, firstSeen, failedCourses };
     writeJson('cache.json', cache);
-    pruneState([...items, ...smart.items(), ...syllabus.items()], raw.announcements || []); // found events keep their checkmarks too
+    pruneState([...items, ...smart.items(), ...syllabus.items(), ...slack.items()], raw.announcements || []); // found events keep their checkmarks too
     Object.assign(meta, { lastError: null, paused: false, retryIndex: 0, nextRetryAt: null });
     log(`refresh ok: ${items.length} items, ${failedCourses.length} course(s) failed`);
     // A new exam appeared → check Boilerexams now, not in up to 6 hours.
@@ -253,7 +259,7 @@ function refresh() {
 
 function pruneState(items, announcements) {
   const ids = new Set([...items.map(i => i.id), ...tasks.map(t => t.id)]);
-  state.done = Object.fromEntries(Object.entries(state.done).filter(([k]) => ids.has(k)));
+  state.done = Object.fromEntries(Object.entries(state.done).filter(([k]) => ids.has(k) || /^(slack|external):/.test(k)));
   const annIds = new Set(announcements.map(a => a.id));
   state.seenAnnouncements = [...new Set(state.seenAnnouncements)].filter(id => annIds.has(id));
   writeJson('state.json', state);
@@ -280,7 +286,7 @@ async function tick() {
 function payload() {
   const raw = cache?.raw || { courses: [], announcements: [] };
   const now = new Date();
-  const courses = coursesOf(raw);
+  const courses = [...coursesOf(raw), ...slack.courses()];
   return {
     fixture: FIXTURE,
     refreshedAt: cache?.refreshedAt || null,
@@ -304,6 +310,7 @@ function payload() {
     smart: smart.payload(), // null unless Smart Announcements is on
     syllabus: syllabus.payload(), // null unless Syllabus scan is on
     external: featureOn(state, 'externalAssignments') ? external.payload() : null,
+    slack: slack.payload(),
     update: updater.payload(),
     // Grades (optional feature): each class's gradebook rows, plus the scheme its syllabus gives (if Syllabus scan read one)
     grades: featureOn(state, 'grades') ? coursesOf(raw).filter(c => { const t = currentTerm(courses); return t && courseTerm(c) === t; })
@@ -358,6 +365,16 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/external/courses' && req.method === 'GET') return send(res, 200, {
       courses: coursesOf(cache?.raw || { courses: [] }).map(({ id, short, name, code }) => ({ id, short, name, code })),
     });
+    if (p === '/api/slack/connect' && req.method === 'POST') {
+      if (!featureOn(state, 'slack')) return send(res, 409, { error: 'Turn on Slack in Settings → Features first.' });
+      const b = await readBody(req);
+      return send(res, 200, await slack.connect(String(b.token || '')));
+    }
+    if (p === '/api/slack/disconnect' && req.method === 'POST') {
+      const b = await readBody(req);
+      return send(res, slack.disconnect(String(b.id || '')) ? 200 : 404, { ok: true });
+    }
+    if (p === '/api/slack/sync' && req.method === 'POST') { await slack.sync(); return send(res, 200, slack.payload()); }
 
     if (p === '/api/refresh' && req.method === 'POST') {
       meta.paused = false; // a manual refresh is allowed to try sign-in again
@@ -375,6 +392,16 @@ const server = http.createServer(async (req, res) => {
       writeJson('tasks.json', tasks);
       if (t.exam && !wasExam) await refreshBoilerexams('exam task', true);
       return send(res, 200, t);
+    }
+
+    if (p === '/api/announced-exam' && req.method === 'POST') {
+      const b = await readBody(req);
+      const i = brightspaceItems().find(x => x.id === b.id && x.kind === 'exam' && x.sourceAnnouncement);
+      if (!i) return send(res, 404, { error: 'That announced exam is gone.' });
+      const fields = eventFields({ title: i.title, date: b.date, start: b.start, end: b.end }, { date: dayKey(i.due) });
+      state.examEdits[i.id] = { date: fields.date, start: fields.start, end: fields.end };
+      writeJson('state.json', state);
+      return send(res, 200, { ok: true });
     }
 
     if (p.startsWith('/api/tasks/') && req.method === 'DELETE') {
@@ -405,7 +432,7 @@ const server = http.createServer(async (req, res) => {
       }
       if (b.updateSnooze === null || (b.updateSnooze && typeof b.updateSnooze.version === 'string')) state.updateSnooze = b.updateSnooze && { version: b.updateSnooze.version.slice(0, 20), until: new Date(Date.now() + 3 * 86400_000).toISOString() };
       for (const [k, v] of Object.entries(b.features || {})) if (FEATURES.some(f => f.id === k) && typeof v === 'boolean') state.features[k] = v; // unknown ids ignored
-      if (b.features || b.hiddenCourses) { smart.tick(); syllabus.tick(); } // Smart Announcements switched on, or a course ticked again → scan now, not at the next tick
+      if (b.features || b.hiddenCourses) { smart.tick(); syllabus.tick(); slack.tick(); } // Smart Announcements switched on, or a course ticked again → scan now, not at the next tick
       writeJson('state.json', state);
       return send(res, 200, state);
     }
@@ -467,5 +494,6 @@ server.listen(PORT, '127.0.0.1', () => {
   gcal.tick(); setInterval(() => gcal.tick(), 60_000); // Google Calendar sync schedule (no-op while the feature is off)
   smart.tick(); setInterval(() => smart.tick(), 60_000); // scans new announcements (no-op while Smart Announcements is off)
   syllabus.tick(); setInterval(() => syllabus.tick(), 60_000); // reads syllabi of classes not read yet (no-op while Syllabus scan is off)
+  slack.tick(); setInterval(() => slack.tick(), 60_000); // polls mentions every five minutes while Slack is on
   if (!FIXTURE) { tick(); setInterval(tick, 60_000); }
 });

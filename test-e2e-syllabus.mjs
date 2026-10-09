@@ -96,6 +96,16 @@ async function run(browserName) {
       const body = await page.innerText('#itemBody');
       assert.match(body, /found in the syllabus/i);
       assert.equal(await page.locator('#itemBody a', { hasText: 'Open the announcement' }).count(), 0);
+      await page.getByRole('button', { name: 'Edit date & time' }).click();
+      const date = await page.locator('#dlgFound-syllabus input[name=date]').inputValue();
+      const next = new Date(`${date}T12:00`); next.setDate(next.getDate() + 1);
+      const changed = [next.getFullYear(), String(next.getMonth() + 1).padStart(2, '0'), String(next.getDate()).padStart(2, '0')].join('-');
+      await page.fill('#dlgFound-syllabus input[name=date]', changed);
+      await page.click('#dlgFound-syllabus button[value=save]');
+      await page.waitForFunction(() => !document.querySelector('#dlgFound-syllabus').open);
+      assert.equal((await s.data()).items.find(i => i.id === quiz.id).found.date, changed);
+      await page.goto(`${s.base}/#item=${encodeURIComponent(quiz.id)}`);
+      await page.waitForFunction(() => document.querySelector('#dlgItem').open);
       await page.click('.smart-remove'); await page.click('.smart-remove');
       await page.waitForFunction(() => ![...document.querySelectorAll('#todoList .item')].some(e => e.textContent.includes('Quiz 3')));
     });

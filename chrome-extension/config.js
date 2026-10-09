@@ -21,6 +21,11 @@ export const PROVIDERS = {
 
 export const PROVIDER_IDS = Object.keys(PROVIDERS);
 
+export function validDashboardUrl(value) {
+  try { const u = new URL(value); return u.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(u.hostname) && !u.username && !u.password && !u.pathname.replace(/\//g, '') && !u.search && !u.hash ? u.origin : null; }
+  catch { return null; }
+}
+
 export function providerUrl(value) {
   try {
     const url = new URL(String(value));
