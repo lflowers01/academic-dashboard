@@ -639,6 +639,7 @@ $('#taskDelete').onclick = async () => {
 };
 
 // ----- ⚙ Settings -----
+const slackAppUrl = `https://api.slack.com/apps?new_app=1&manifest_json=${encodeURIComponent(JSON.stringify({ display_information: { name: 'Academic Dashboard' }, oauth_config: { scopes: { user: ['search:read'] } } }))}`;
 hooks.settings.push({ id: 'slack', title: 'Slack', visible: () => !!data?.slack, render: box => {
   const token = h('input', { type: 'password', autocomplete: 'off', placeholder: 'xoxp-…', 'aria-label': 'Slack User OAuth Token' });
   const result = h('p', { class: 'muted', role: 'status' });
@@ -649,8 +650,9 @@ hooks.settings.push({ id: 'slack', title: 'Slack', visible: () => !!data?.slack,
   box.replaceChildren(h('h2', {}, 'Slack clubs'),
     h('p', {}, 'Connect each Slack account once. Mentions from any channel are checked automatically; club labels come from the workspace or channel name.'),
     ...accounts,
-    h('p', {}, h('a', { href: 'https://api.slack.com/apps', target: '_blank', rel: 'noopener noreferrer' }, 'Create a Slack app ↗'),
-      ' · Add the User Token Scope search:read, install it to your workspace, then copy its User OAuth Token (starts with xoxp-) here. Bot tokens (xoxb-) and the ChatGPT Slack connector are separate. A workspace admin may need to approve the app.'),
+    h('p', {}, '1. ', h('a', { href: slackAppUrl, target: '_blank', rel: 'noopener noreferrer' }, 'Open Slack app setup ↗'), ' and sign in to the Slack account you want to connect. Choose its workspace, then create the preconfigured app.'),
+    h('p', {}, '2. In the new app, open OAuth & Permissions and click Install to Workspace (or Reinstall to Workspace). If Slack asks for approval, ask a workspace admin.'),
+    h('p', {}, '3. On that same page, copy User OAuth Token (starts with xoxp-) and paste it below. Do not copy Bot User OAuth Token (xoxb-). Repeat for each separate Slack account. The ChatGPT Slack connector is separate.'),
     h('label', {}, 'User OAuth Token ', token), ' ',
     h('button', { type: 'button', onclick: async () => { try { result.textContent = 'Connecting…'; await api('/api/slack/connect', { token: token.value.trim() }); token.value = ''; await load(); showSettingsSection('slack'); } catch (e) { result.textContent = e.message; } } }, 'Connect account'),
     h('button', { type: 'button', onclick: async () => { result.textContent = 'Checking mentions…'; await api('/api/slack/sync', {}); await load(); showSettingsSection('slack'); } }, 'Sync now'), result,
