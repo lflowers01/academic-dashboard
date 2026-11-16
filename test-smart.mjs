@@ -218,7 +218,7 @@ test('a second sure deadline on the same course and day waits for review, naming
   fs.writeFileSync(path.join(dir, 'smart-ann.json'), JSON.stringify({ scanned: {}, found: [f('sa:1:0', 'Unit 1 coursework deadline'), f('sa:1:1', 'Complete remaining Unit 1 work'), f('sa:1:2', 'Lab report', { accepted: true })] }));
   fs.writeFileSync(path.join(dir, 'state.json'), JSON.stringify({ features: { smartAnnouncements: true } }));
   const port = await freePort();
-  const child = spawn(process.execPath, [path.join(ROOT, 'server.mjs'), '--fixture'], { windowsHide: true, stdio: 'ignore', env: { ...process.env, DASH_PORT: String(port), DASH_DATA: dir } });
+  const child = spawn(process.execPath, [path.join(ROOT, 'server.mjs'), '--fixture'], { windowsHide: true, stdio: 'ignore', env: { ...process.env, DASH_PORT: String(port), DASH_DATA: dir, FAKE_SMART_MODE: 'hang' } });
   try {
     let d; for (let i = 0; i < 60; i++) { try { d = await (await fetch(`http://localhost:${port}/api/data`)).json(); break; } catch { await new Promise(r => setTimeout(r, 100)); } }
     assert.deepEqual(d.smart.review.map(x => [x.title, x.maybe]), [['Complete remaining Unit 1 work', 'Unit 1 coursework deadline']]);

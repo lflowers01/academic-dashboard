@@ -37,7 +37,7 @@ Several steps need the **internet**, or must run **outside a sandbox**, or both:
 - Tell the user:
   1. A black window opened. Type `y` if it asks to install anything.
   2. Enter your Purdue username and password **in that window**, never in this chat. They're saved in Windows Credential Manager.
-  3. For MFA pick **number matching / approval**, then approve the number on your phone.
+  3. On a personal PC recommend **option 3 — This computer answers code requests**. Follow MCP setup to enroll a software authenticator through Microsoft Security info (Authenticator app → use a different authenticator app → Can't scan image?). Keep it enrolled on the phone too. The user pastes the setup key only into the wizard, never chat; MCP stores it in Windows Credential Manager. Explain that password and second factor will both live on this PC. On shared PCs use option 1; if code entry is unavailable, use phone approval. Never read, generate, copy, or log the setup key yourself.
   4. If it offers to configure AI apps, that's optional (it lets you ask your AI assistant about your courses).
   5. Tell me when it says it's done.
 - Then run `npm run check` again. It must print `OK … N active course(s)`. If it reports a sign-in problem, repeat with `npx -y brightspace-mcp-server@latest auth` in a new window.
@@ -60,7 +60,7 @@ Tell them briefly:
 - **⚙ Settings → Notifications**: when Windows starts and after every 3-hour refresh they get one Windows notification listing what's due today and early tomorrow (before 10 AM). "Send a test notification" is there too. Optional features live in ⚙ Settings → Features. If nothing appears: Windows Settings → System → Notifications → allow "Windows PowerShell".
 - **+ Add task** (or press N) for things Brightspace doesn't track, like homework on WebAssign/Achieve. Tick "This is an exam" for exams.
 - Exams found in Brightspace (quizzes named "Exam 2", "Midterm"…, or exam dates in announcements) show in gold on the calendar.
-- When the Brightspace sign-in expires, a sign-in window opens by itself: approve the number on the phone and the dashboard refreshes when it closes. If it was dismissed, the red "sign-in needed" banner's **Sign in** button reopens it.
+- When the Brightspace sign-in expires, MCP first restores the saved Microsoft session or answers a code request using its saved authenticator enrollment. A phone-approval sign-in window opens only when required; the dashboard refreshes when it closes. If it was dismissed, the red "sign-in needed" banner's **Sign in** button reopens it.
 
 ## When the user asks to "update" the dashboard
 The dashboard updates itself: when a newer release exists, an **Update available** button appears in its header; **Update now** downloads the release, keeps `data\`, backs up the old files to `data\backup-v<old version>\`, and restarts. Point the user there first. Do it by hand (below) only if that fails, or if they ask you to.

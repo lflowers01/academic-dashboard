@@ -50,7 +50,7 @@ The agent follows the step-by-step instructions in `AGENTS.md`. It installs Node
 
 **What you do yourself:**
 - **Approve** the commands it asks to run. Codex asks before anything that needs the internet or runs outside its sandbox; that's expected, so say yes.
-- **Sign in to Purdue once**, in a small black window the agent opens. Type your password *there*, never in the chat, and approve the number on your phone. The login is stored in Windows Credential Manager.
+- **Sign in to Purdue once**, in a small black window the agent opens. Type your password *there*, never in the chat. On your own PC, we recommend **option 3: This computer answers code requests**. It saves an authenticator setup key in Windows Credential Manager so refreshes can sign in without your phone. Keep your phone authenticator enrolled too. On shared PCs choose option 1.
 - If the agent says its sandbox can't start the dashboard, **double-click `install-autostart.cmd`** in the folder yourself.
 
 When it's done, bookmark **http://localhost:4321**.
@@ -63,7 +63,7 @@ When it's done, bookmark **http://localhost:4321**.
    ```
    npx -y brightspace-mcp-server@latest setup --purdue
    ```
-   Type `y` if asked to install it, enter your Purdue login **in that window**, choose **number matching / approval** for MFA, and approve on your phone. Offers to set up AI apps are optional.
+   Type `y` if asked to install it, enter your Purdue login **in that window**, then choose **3 — This computer answers code requests** on your own PC. In Microsoft Security info, add **Authenticator app → I want to use a different authenticator app → Can't scan image?**, finish enrolling it in your phone app, and paste the setup key only into the setup window, never an AI chat. MCP saves it in Windows Credential Manager and also remembers this device. This puts your password and second factor on this PC; choose option 1 on shared computers. If code entry is unavailable, approve on your phone instead. Offers to set up AI apps are optional. See the [MCP sign-in guide](https://github.com/RohanMuppa/brightspace-mcp-server/blob/main/docs/sign-in.md#fewer-2fa-prompts).
 3. **Get the dashboard**: download `academic-dashboard.zip` from the [latest release](../../releases/latest) and extract it (e.g. to your Desktop).
 4. **Install and test it**:
    ```
@@ -178,7 +178,7 @@ Nothing here uses Claude. It's an estimate; your instructor's gradebook is offic
 
 ## Troubleshooting
 
-**Red banner: "Brightspace sign-in needed"**: your Brightspace login expired. A sign-in window opens by itself: approve the number on your phone, and the dashboard refreshes when the window closes. Automatic refreshes pause until then, so your phone doesn't get MFA prompts at 3 AM. If you closed the window, click **Sign in** to open it again.
+**Red banner: "Brightspace sign-in needed"**: your Brightspace login expired. The dashboard first lets Brightspace MCP restore its saved Microsoft session or answer code requests with its saved authenticator enrollment. If a phone approval is required, a sign-in window opens: approve the number on your phone, and the dashboard refreshes when the window closes. Automatic refreshes pause until then. If you closed the window, click **Sign in** to open it again. The dashboard never copies your saved authenticator key.
 
 **Yellow banner: "Couldn't reach Brightspace"**: usually no internet. It keeps showing your last data and retries in 5, 15, then 30 minutes.
 

@@ -71,10 +71,11 @@ function writeJson(n, v) {
 // Fixture mode: fictional sample data, shifted by whole days so it's always "around today".
 function loadFixture() {
   const raw = JSON.parse(fs.readFileSync(path.join(ROOT, 'fixtures/sample.json'), 'utf8'));
-  const shift = Math.round((Date.now() - Date.parse(raw.anchor)) / 864e5) * 864e5;
+  const shift = Math.round((Date.now() - Date.parse(raw.anchor)) / 864e5);
+  const shifted = value => { const d = new Date(value); d.setDate(d.getDate() + shift); return d; };
   const walk = o => { for (const [k, v] of Object.entries(o || {})) {
     if (v && typeof v === 'object') walk(v);
-    else if (/^(dueDate|startDate|endDate|date|createdDate)$/.test(k) && v) o[k] = new Date(Date.parse(v) + shift).toISOString();
+    else if (/^(dueDate|startDate|endDate|date|createdDate)$/.test(k) && v) o[k] = shifted(v).toISOString();
   } };
   walk(raw);
   // dates written in announcement text ("Wednesday, September 23") move with the data, or the demo drifts into the past
@@ -82,7 +83,7 @@ function loadFixture() {
   const year = new Date(raw.anchor).getFullYear();
   const DATE_RE = new RegExp(`\\b((?:Mon|Tues|Wednes|Thurs|Fri|Satur|Sun)day, )?(${MONTHS.join('|')}) (\\d{1,2})\\b`, 'g');
   const retext = t => String(t || '').replace(DATE_RE, (m, weekday, mon, day) =>
-    new Date(new Date(year, MONTHS.indexOf(mon), +day, 12).getTime() + shift)
+    shifted(new Date(year, MONTHS.indexOf(mon), +day, 12))
       .toLocaleDateString('en-US', weekday ? { weekday: 'long', month: 'long', day: 'numeric' } : { month: 'long', day: 'numeric' }));
   for (const x of raw.announcements || []) { x.title = retext(x.title); x.body = retext(x.body); }
   return { raw, refreshedAt: new Date().toISOString(), firstSeen: {}, failedCourses: [] };

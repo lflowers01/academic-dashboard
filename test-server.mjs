@@ -104,6 +104,19 @@ test('expired sign-in: pauses, keeps serving, no Brightspace retries', async () 
   } finally { await s.stop(); }
 });
 
+test('saved authenticator sign-in: joins pending recovery without opening a window or pausing', async () => {
+  const s = await startServer({ mode: 'automatic' });
+  try {
+    const d = await s.settled();
+    assert.equal(d.lastError, null);
+    assert.equal(d.paused, false);
+    assert.ok(d.refreshedAt);
+    assert.doesNotMatch(s.read('server.log'), /sign-in window/);
+    const calls = s.read('fake.log').trim().split('\n').map(JSON.parse);
+    assert.equal(calls.filter(c => c.name === 'get_my_courses').length, 4);
+  } finally { await s.stop(); }
+});
+
 test('session expired, server starts a hidden MFA sign-in: reported as signed out right away, not a timeout', async () => {
   const s = await startServer({ mode: 'reauth' });
   try {

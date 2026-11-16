@@ -12,6 +12,7 @@ import { appendFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 const MODE = process.env.FAKE_MODE || 'ok';
+let automaticAttempts = 0;
 const log = x => process.env.FAKE_LOG && appendFileSync(process.env.FAKE_LOG, JSON.stringify(x) + '\n');
 log({ pid: process.pid, mode: MODE });
 
@@ -49,6 +50,10 @@ server.setRequestHandler(CallToolRequestSchema, async req => {
   const { name, arguments: args = {} } = req.params;
   log({ name, args });
   if (name === 'get_my_courses') {
+    if (MODE === 'automatic' && automaticAttempts++ < 3) {
+      process.stderr.write('[INFO] Attempting auto-reauthentication...\n[INFO] Auto-launching brightspace-auth...\n');
+      return { ...text(automaticAttempts === 2 ? 'A sign-in is already running in another process. Let it finish, then try again.' : 'Brightspace sign-in is answering its own verification code from the saved authenticator enrollment. No phone approval is being requested. Call this tool again right away.'), isError: true };
+    }
     if (MODE === 'auth') return { ...text('Brightspace sign-in required. Run: npx -y brightspace-mcp-server@latest auth'), isError: true };
     if (MODE === 'hang') return new Promise(() => {});
     if (MODE === 'reauth') { // what the real server prints when its session expired, then it waits for MFA

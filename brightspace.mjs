@@ -13,7 +13,8 @@ const COURSE_TIMEOUT = Number(process.env.DASH_COURSE_TIMEOUT) || 150_000;
 const TOTAL_TIMEOUT = Number(process.env.DASH_TOTAL_TIMEOUT) || 4 * 60_000;
 const AUTH_RE = /sign[- ]?in|log ?in|authenticat|mfa|credential|keychain|password|session (has )?expired|re-?auth|setup/i;
 // brightspace-mcp-server's stderr when its session expired and it starts signing in by itself
-const REAUTH_RE = /auto-reauthenticat|launching brightspace-auth|MFA approval|Number match/i;
+const REAUTH_RE = /MFA approval|Number match/i;
+const AUTOMATIC_SIGNIN_RE = /(?:answering|entering) (?:its|their) own verification code|sign-in is already in progress, answering|sign-in is already running in another process/i;
 
 export class FetchError extends Error {
   constructor(kind, message) { super(message); this.kind = kind; } // kind: 'auth' | 'network'
@@ -31,8 +32,15 @@ async function withClient(fn) {
   });
   const client = new Client({ name: 'academic-dashboard', version: '1.0.0' });
   const call = async (name, args, timeout = 60_000) => {
-    const r = await client.callTool({ name, arguments: args }, undefined, { timeout });
-    const text = (r.content || []).map(p => p.text || '').join('');
+    let r, text;
+    do {
+      if (stopped) throw stopped;
+      r = await client.callTool({ name, arguments: args }, undefined, { timeout });
+      text = (r.content || []).map(p => p.text || '').join('');
+      // The MCP owns the saved authenticator key and asks callers to join its pending sign-in.
+      if (!AUTOMATIC_SIGNIN_RE.test(text)) break;
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    } while (true);
     if (r.isError) throw new FetchError(AUTH_RE.test(text) ? 'auth' : 'network', text.slice(0, 300) || `${name} failed`);
     try { return JSON.parse(text); } catch { throw new FetchError(AUTH_RE.test(text) ? 'auth' : 'network', text.slice(0, 300) || `${name}: empty reply`); }
   };
@@ -50,8 +58,7 @@ async function withClient(fn) {
     };
     timer = setTimeout(() => abort(new FetchError('network', `Brightspace took longer than ${Math.round(TOTAL_TIMEOUT / 60000)} minutes`)), TOTAL_TIMEOUT);
   });
-  // An expired session makes the server start a hidden sign-in that waits minutes for an MFA approval nobody can see.
-  // Its stderr says so: stop right away and report it as signed out. (Reading stderr also keeps its pipe from filling up.)
+  // Only a phone approval needs the visible sign-in fallback; automatic recovery can use the saved enrollment.
   transport.stderr?.on('data', d => { if (REAUTH_RE.test(String(d))) abort(new FetchError('auth', 'Brightspace sign-in expired')); });
   try {
     return await Promise.race([(async () => { await client.connect(transport); return fn(call); })(), stop]);
